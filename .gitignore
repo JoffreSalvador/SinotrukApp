@@ -1,0 +1,26 @@
+# Secretos / entorno
+.env
+
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# SO
+*.log
+.DS_Store
+Thumbs.db

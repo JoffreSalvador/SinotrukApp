@@ -1,0 +1,93 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:sinotruk_app/models/models.dart';
+import 'package:sinotruk_app/repositories/repositories.dart';
+
+class MockSupabaseClient extends Mock implements SupabaseClient {}
+class MockPostgrestQueryBuilder extends Mock implements PostgrestQueryBuilder {}
+class MockPostgrestFilterBuilder extends Mock implements PostgrestFilterBuilder {}
+class MockPostgrestTransformBuilder extends Mock implements PostgrestTransformBuilder {}
+
+void main() {
+  late MockSupabaseClient client;
+  late TripRepository trips;
+  late DriverAccountRepository accounts;
+
+  setUp(() {
+    client = MockSupabaseClient();
+    trips = TripRepository(client);
+    accounts = DriverAccountRepository(client);
+  });
+
+  group('TripRepository', () {
+    test('tripsOfDriver construye query con filtros de fecha', () async {
+      final queryBuilder = MockPostgrestQueryBuilder();
+      final filterBuilder = MockPostgrestFilterBuilder();
+
+      when(() => client.from('trips')).thenReturn(queryBuilder);
+      when(() => queryBuilder.select()).thenReturn(filterBuilder);
+      when(() => filterBuilder.eq('driver_id', 'd1')).thenReturn(filterBuilder);
+      when(() => filterBuilder.order('trip_date', ascending: false)).thenReturn(filterBuilder);
+      when(() => filterBuilder).thenAnswer((_) async => [
+        {'id': 't1', 'driver_id': 'd1', 'trip_date': '2026-08-01', 'observations': 'ok'},
+      ]);
+
+      final tripsList = await trips.tripsOfDriver('d1');
+      expect(tripsList.length, 1);
+      expect(tripsList.first.id, 't1');
+      verify(() => filterBuilder.eq('driver_id', 'd1')).called(1);
+      verify(() => filterBuilder.order('trip_date', ascending: false)).called(1);
+    });
+
+    test('tripsOfDriver filtra por rango de fechas', () async {
+      final queryBuilder = MockPostgrestQueryBuilder();
+      final filterBuilder = MockPostgrestFilterBuilder();
+
+      when(() => client.from('trips')).thenReturn(queryBuilder);
+      when(() => queryBuilder.select()).thenReturn(filterBuilder);
+      when(() => filterBuilder.eq('driver_id', 'd1')).thenReturn(filterBuilder);
+      when(() => filterBuilder.gte('trip_date', '2026-08-01')).thenReturn(filterBuilder);
+      when(() => filterBuilder.lte('trip_date', '2026-08-31')).thenReturn(filterBuilder);
+      when(() => filterBuilder.order('trip_date', ascending: false)).thenReturn(filterBuilder);
+      when(() => filterBuilder).thenAnswer((_) async => []);
+
+      await trips.tripsOfDriver('d1', from: '2026-08-01', to: '2026-08-31');
+      verify(() => filterBuilder.gte('trip_date', '2026-08-01')).called(1);
+      verify(() => filterBuilder.lte('trip_date', '2026-08-31')).called(1);
+    });
+  });
+
+  group('DriverAccountRepository', () {
+    test('entriesOf construye query con driver_id y opcional tx_type', () async {
+      final queryBuilder = MockPostgrestQueryBuilder();
+      final filterBuilder = MockPostgrestFilterBuilder();
+
+      when(() => client.from('driver_accounts')).thenReturn(queryBuilder);
+      when(() => queryBuilder.select()).thenReturn(filterBuilder);
+      when(() => filterBuilder.eq('driver_id', 'd1')).thenReturn(filterBuilder);
+      when(() => filterBuilder.order('tx_date', ascending: false)).thenReturn(filterBuilder);
+      when(() => filterBuilder).thenAnswer((_) async => []);
+
+      await accounts.entriesOf('d1');
+      verify(() => filterBuilder.eq('driver_id', 'd1')).called(1);
+      verify(() => filterBuilder.order('tx_date', ascending: false)).called(1);
+    });
+
+    test('entriesOf con tx_type añade filtro extra', () async {
+      final queryBuilder = MockPostgrestQueryBuilder();
+      final filterBuilder = MockPostgrestFilterBuilder();
+
+      when(() => client.from('driver_accounts')).thenReturn(queryBuilder);
+      when(() => queryBuilder.select()).thenReturn(filterBuilder);
+      when(() => filterBuilder.eq('driver_id', 'd1')).thenReturn(filterBuilder);
+      when(() => filterBuilder.eq('tx_type', 'PagoRecibido')).thenReturn(filterBuilder);
+      when(() => filterBuilder.order('tx_date', ascending: false)).thenReturn(filterBuilder);
+      when(() => filterBuilder).thenAnswer((_) async => []);
+
+      await accounts.entriesOf('d1', txType: 'PagoRecibido');
+      verify(() => filterBuilder.eq('tx_type', 'PagoRecibido')).called(1);
+    });
+  });
+}
