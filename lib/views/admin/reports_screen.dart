@@ -19,15 +19,19 @@ class _TripsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tripsAsync = ref.watch(tripsStreamProvider(range));
     final passengersAsync = ref.watch(passengersStreamProvider);
+    final packagesAsync = ref.watch(packagesStreamProvider);
     final expensesAsync = ref.watch(expensesStreamProvider);
+    final driversAsync = ref.watch(driversStreamProvider);
 
-    return _Async3<Trip, TripPassenger, TripExpense>(
+    return _Async5<Trip, TripPassenger, TripPackage, TripExpense, Profile>(
       a: tripsAsync,
       b: passengersAsync,
-      c: expensesAsync,
-      builder: (context, trips, passengers, expenses) {
-        final driverNames = _buildDriverNames(ref);
-        final rows = ReportsCalculator.byTrip(trips: trips, driverNames: driverNames, passengers: passengers, expenses: expenses);
+      c: packagesAsync,
+      d: expensesAsync,
+      e: driversAsync,
+      builder: (context, trips, passengers, packages, expenses, drivers) {
+        final driverNames = {for (final d in drivers) d.id: d.name};
+        final rows = ReportsCalculator.byTrip(trips: trips, driverNames: driverNames, passengers: passengers, packages: packages, expenses: expenses);
         return ListView.builder(
           padding: const EdgeInsets.all(8),
           itemCount: rows.length,
@@ -41,15 +45,95 @@ class _TripsTab extends ConsumerWidget {
                 Expanded(child: Text(money(row.ingreso), style: const TextStyle(color: Colors.green))),
                 Expanded(child: Text(money(row.egreso), style: const TextStyle(color: AppTheme.danger))),
               ])),
-              children: [
-                ListTile(title: Text('Observaciones: ${row.trip.observations ?? "-"}')), ListTile(title: Text('Pasajeros/encomiendas: ${row.routes.length}')),
-              ],
+              children: _buildTripDetail(row),
             );
           },
         );
       },
     );
   }
+
+  List<Widget> _buildTripDetail(TripReportRow row) {
+    final widgets = <Widget>[];
+    
+    // Pasajeros
+    if (row.passengers.isNotEmpty) {
+      widgets.add(_sectionTitle('Pasajeros (${row.passengers.length})'));
+      for (final p in row.passengers) {
+        widgets.add(ListTile(
+          dense: true,
+          leading: const Icon(Icons.person, size: 20),
+          title: Text(p.route),
+          subtitle: Text('Pago: ${p.paymentMethod}'),
+          trailing: Text(money(p.cost), style: const TextStyle(fontWeight: FontWeight.w500)),
+        ));
+      }
+    }
+    
+    // Encomiendas
+    if (row.packages.isNotEmpty) {
+      widgets.add(_sectionTitle('Encomiendas (${row.packages.length})'));
+      for (final p in row.packages) {
+        widgets.add(ListTile(
+          dense: true,
+          leading: const Icon(Icons.inventory_2, size: 20),
+          title: Text(p.route),
+          subtitle: Text('Pago: ${p.paymentMethod}'),
+          trailing: Text(money(p.cost), style: const TextStyle(fontWeight: FontWeight.w500)),
+        ));
+      }
+    }
+    
+    // Gastos del viaje
+    if (row.expenses.isNotEmpty) {
+      widgets.add(_sectionTitle('Gastos del viaje'));
+      final expensesByCategory = <String, List<TripExpense>>{};
+      for (final e in row.expenses) {
+        expensesByCategory.putIfAbsent(e.category, () => []).add(e);
+      }
+      for (final entry in expensesByCategory.entries) {
+        final totalCat = PaymentMath.sum(entry.value.map((e) => e.amount));
+        widgets.add(ListTile(
+          dense: true,
+          leading: const Icon(Icons.receipt, size: 20),
+          title: Text(entry.key),
+          subtitle: entry.value.length > 1 
+              ? Text(entry.value.map((e) => '${e.detail ?? ""}: ${money(e.amount)}').join(', '))
+              : null,
+          trailing: Text(money(totalCat), style: const TextStyle(fontWeight: FontWeight.w500, color: AppTheme.danger)),
+        ));
+      }
+      widgets.add(ListTile(
+        dense: true,
+        title: const Text('Total gastos', style: TextStyle(fontWeight: FontWeight.bold)),
+        trailing: Text(money(row.egreso), style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger)),
+      ));
+    }
+    
+    // Observaciones al final
+    if (row.trip.observations != null && row.trip.observations!.isNotEmpty) {
+      widgets.add(_sectionTitle('Observaciones'));
+      widgets.add(ListTile(
+        dense: true,
+        leading: const Icon(Icons.note, size: 20),
+        title: Text(row.trip.observations!),
+      ));
+    }
+    
+    if (widgets.isEmpty) {
+      widgets.add(const ListTile(
+        dense: true,
+        title: Text('Sin detalles adicionales'),
+      ));
+    }
+    
+    return widgets;
+  }
+
+  Widget _sectionTitle(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+  );
 
   Map<String, String> _buildDriverNames(WidgetRef ref) {
     final drivers = ref.read(driversStreamProvider).value ?? [];

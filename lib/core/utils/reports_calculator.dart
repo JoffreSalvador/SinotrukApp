@@ -11,18 +11,26 @@ class ReportsCalculator {
     required List<Trip> trips,
     required Map<String, String> driverNames,
     required List<TripPassenger> passengers,
+    required List<TripPackage> packages,
     required List<TripExpense> expenses,
   }) =>
       trips.map((trip) {
         final tripPax =
             passengers.where((p) => p.tripId == trip.id).toList();
+        final tripPkgs =
+            packages.where((p) => p.tripId == trip.id).toList();
         final tripExp =
             expenses.where((e) => e.tripId == trip.id).toList();
         return TripReportRow(
           trip: trip,
           driverName: driverNames[trip.driverId] ?? trip.driverId,
-          routes: tripPax.map((p) => p.route).toList(),
-          ingreso: PaymentMath.sum(tripPax.map((p) => p.cost)),
+          passengers: tripPax,
+          packages: tripPkgs,
+          expenses: tripExp,
+          ingreso: PaymentMath.sum([
+            ...tripPax.map((p) => p.cost),
+            ...tripPkgs.map((p) => p.cost),
+          ]),
           egreso: PaymentMath.sum(tripExp.map((e) => e.amount)),
         );
       }).toList();
@@ -203,19 +211,29 @@ extension<T> on Iterable<T> {
 class TripReportRow {
   final Trip trip;
   final String driverName;
-  final List<String> routes;
+  final List<TripPassenger> passengers;
+  final List<TripPackage> packages;
+  final List<TripExpense> expenses;
   final double ingreso;
   final double egreso;
 
   const TripReportRow({
     required this.trip,
     required this.driverName,
-    required this.routes,
+    required this.passengers,
+    required this.packages,
+    required this.expenses,
     required this.ingreso,
     required this.egreso,
   });
 
-  String get routeText => routes.isEmpty ? '-' : routes.join(' | ');
+  String get routeText {
+    final allRoutes = [
+      ...passengers.map((p) => p.route),
+      ...packages.map((p) => p.route),
+    ];
+    return allRoutes.isEmpty ? '-' : allRoutes.join(' | ');
+  }
 }
 
 class DriverReportRow {

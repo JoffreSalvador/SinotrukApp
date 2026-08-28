@@ -45,12 +45,13 @@ void main() {
         trips: [trips[0]],
         driverNames: driverNames,
         passengers: passengers,
+        packages: const [],
         expenses: expenses,
       );
       expect(rows.single.driverName, 'Luis');
       expect(rows.single.ingreso, 50); // 15+25+10
       expect(rows.single.egreso, 30); // 20+10
-      expect(rows.single.routes.length, 3);
+      expect(rows.single.passengers.length, 3);
     });
 
     test('maneja viaje sin pasajeros ni gastos (nulos/vacios)', () {
@@ -59,6 +60,7 @@ void main() {
             tripDate: '2026-05-01')],
         driverNames: driverNames,
         passengers: const [],
+        packages: const [],
         expenses: const [],
       );
       expect(rows.single.ingreso, 0);
