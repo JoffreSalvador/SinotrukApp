@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_utils.dart';
@@ -79,27 +80,44 @@ class FleetScreen extends ConsumerWidget {
           const Divider(),
           const ListTile(
               title: Text('Asignaciones', style: TextStyle(fontWeight: FontWeight.bold))),
+          // Asignaciones
           assignmentsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Error: $e'),
-            data: (assignments) => Column(
-              children: [
-                for (final a in assignments)
-                  ListTile(
-                    leading: Icon(a.isActive ? Icons.link : Icons.link_off,
-                        color: a.isActive ? null : Colors.grey),
-                    title: Text(a.vehicleId),
-                    subtitle: Text(a.isActive
-                        ? 'Desde ${a.assignedDate}'
-                        : '${a.assignedDate} → ${a.unassignedDate ?? '-'}'),
-                  ),
-                if (assignments.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Text('Sin asignaciones registradas'),
-                  ),
-              ],
-            ),
+            data: (assignments) {
+              final vehicles = vehiclesAsync.value ?? [];
+              final drivers = driversAsync.value ?? [];
+              return Column(
+                children: [
+                  for (final a in assignments) ...[
+                    ListTile(
+                      leading: Icon(a.isActive ? Icons.link : Icons.link_off,
+                          color: a.isActive ? null : Colors.grey),
+                      title: _vehicleName(a.vehicleId, vehicles),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _driverName(a.driverId, drivers),
+                          Text(a.isActive
+                              ? 'Asignado: ${a.assignedDate}'
+                              : '${a.assignedDate} → ${a.unassignedDate ?? '-'}'),
+                        ],
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+                        onPressed: () => _deleteAssignment(context, ref, a.id),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                  ],
+                  if (assignments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('Sin asignaciones registradas'),
+                    ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -133,7 +151,7 @@ class FleetScreen extends ConsumerWidget {
 
     try {
       await ref.read(adminRepositoryProvider).addVehicle(Vehicle(
-            id: DateTime.now().microsecondsSinceEpoch.toString(),
+            id: const Uuid().v4(),
             plate: plateCtrl.text.trim().toUpperCase(),
             brand: brandCtrl.text.trim().isEmpty ? null : brandCtrl.text.trim(),
             model: modelCtrl.text.trim().isEmpty ? null : modelCtrl.text.trim(),
@@ -163,6 +181,37 @@ class FleetScreen extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
     }
+  }
+
+  Future<void> _deleteAssignment(BuildContext context, WidgetRef ref, String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eliminar asignación?'),
+        content: const Text('¿Estás seguro de eliminar esta asignación?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: AppTheme.danger), onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(adminRepositoryProvider).deleteAssignment(id);
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Asignación eliminada')));
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.danger));
+    }
+  }
+
+  Widget _vehicleName(String vehicleId, List<Vehicle> vehicles) {
+    final v = vehicles.firstWhere((v) => v.id == vehicleId, orElse: () => Vehicle(id: vehicleId, plate: vehicleId, brand: null, model: null));
+    return Text([v.brand, v.model, v.plate].whereType<String>().join(' · '));
+  }
+
+  Widget _driverName(String driverId, List<Profile> drivers) {
+    final d = drivers.firstWhere((d) => d.id == driverId, orElse: () => Profile(id: driverId, name: driverId, username: '', role: 'driver'));
+    return Text(d.name);
   }
 
   Future<void> _showAssign(BuildContext context, WidgetRef ref) async {

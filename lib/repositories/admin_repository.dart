@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../models/models.dart';
 
@@ -57,12 +58,16 @@ class AdminRepository {
       }
     }
     await _client.from('vehicle_assignments').upsert({
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'id': const Uuid().v4(),
       'vehicle_id': vehicleId,
       'driver_id': driverId,
       'is_active': true,
       'assigned_date': date,
     });
+  }
+
+  Future<void> deleteAssignment(String id) async {
+    await _client.from('vehicle_assignments').delete().eq('id', id);
   }
 
   Future<void> addVehicleExpense(VehicleExpense expense) async {
