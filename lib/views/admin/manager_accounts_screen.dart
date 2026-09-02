@@ -13,17 +13,30 @@ import '../../providers/stream_providers.dart';
 import '../../widgets/common_widgets.dart';
 
 /// Cuenta interna admin ↔ gerente (realtime).
-class ManagerAccountsScreen extends ConsumerWidget {
+class ManagerAccountsScreen extends ConsumerStatefulWidget {
   const ManagerAccountsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final entriesAsync = ref.watch(managerEntriesStreamProvider);
-    final adjAsync = ref.watch(managerAdjustmentProvider);
+  ConsumerState<ManagerAccountsScreen> createState() => _ManagerAccountsScreenState();
+}
+
+class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
+  String _filter = 'Todos';
+  DateTime? _from;
+  DateTime? _to;
+
+  @override
+  Widget build(BuildContext context) {
+    final from = _from ?? DateTime(DateTime.now().year);
+    final to = _to ?? DateTime(DateTime.now().year, 12, 31);
+    final range = (from: DateUtilsX.format(from), to: DateUtilsX.format(to));
+
+    final entriesAsync = ref.watch(managerCombinedEntriesProvider(range));
+    final adjAsync = ref.watch(managerAdjustmentStreamProvider(range));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Cuenta con el gerente'), actions: [
-        IconButton(icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(managerAdjustmentProvider)),
+        IconButton(icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(managerAdjustmentStreamProvider(range))),
       ]),
       body: ListView(
         padding: const EdgeInsets.all(12),
@@ -46,6 +59,7 @@ class ManagerAccountsScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: [
                       Chip(label: Text('Por cobrar: ${view.cobrar}')),
+                      Chip(label: Text('Empresa: ${view.empresa}')),
                       Chip(label: Text('Por pagar: ${view.pagar}')),
                       Chip(label: Text('Realizados: ${view.made}')),
                       Chip(label: Text('Recibidos: ${view.received}')),
@@ -61,26 +75,127 @@ class ManagerAccountsScreen extends ConsumerWidget {
             OutlinedButton.icon(onPressed: () => _showManualDialog(context, ref, true), icon: const Icon(Icons.add_circle_outline, color: AppTheme.ok), label: const Text('+ Por cobrar')),
             OutlinedButton.icon(onPressed: () => _showManualDialog(context, ref, false), icon: const Icon(Icons.remove_circle_outline, color: AppTheme.danger), label: const Text('+ Por pagar')),
           ]),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            isDense: true,
+            value: _filter,
+            decoration: const InputDecoration(labelText: 'Filtrar pagos'),
+            items: const [
+              DropdownMenuItem(value: 'Todos', child: Text('Todos')),
+              DropdownMenuItem(value: 'Recibidos', child: Text('Recibidos')),
+              DropdownMenuItem(value: 'Realizados', child: Text('Realizados')),
+              DropdownMenuItem(value: 'Por cobrar', child: Text('Por cobrar')),
+              DropdownMenuItem(value: 'Por pagar', child: Text('Por pagar')),
+            ],
+            onChanged: (v) => setState(() => _filter = v ?? 'Todos'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(context: context, initialDate: _from ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) setState(() => _from = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Desde', prefixIcon: Icon(Icons.date_range)),
+                    child: Text(_from != null ? DateUtilsX.format(_from!) : 'Seleccionar'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(context: context, initialDate: _to ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) setState(() => _to = picked);
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Hasta', prefixIcon: Icon(Icons.date_range)),
+                    child: Text(_to != null ? DateUtilsX.format(_to!) : 'Seleccionar'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (_from != null || _to != null)
+                IconButton(
+                  icon: const Icon(Icons.clear, color: AppTheme.danger),
+                  onPressed: () => setState(() { _from = null; _to = null; }),
+                  tooltip: 'Limpiar fechas',
+                ),
+            ],
+          ),
           const Divider(height: 24),
           entriesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Error: $e'),
-            data: (entries) => Column(
-              children: [
-                for (final e in entries)
-                  ListTile(
-                    leading: Icon(_iconFor(e), color: _colorFor(e)),
-                    title: Text(e.detail),
-                    subtitle: Text('${e.txDate} · ${_labelFor(e)}${e.isAutomatic ? " · auto" : ""}'),
-                    trailing: Text(money(e.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+            data: (entries) {
+              final filtered = _filterEntries(entries);
+              final total = PaymentMath.sum(filtered.map((e) => e.amount));
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Total filtrado: ${money(total)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
-                if (entries.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
-              ],
-            ),
+for (final e in filtered)
+                      e.isAutomatic
+                          ? ListTile(
+                              leading: Icon(_iconFor(e), color: _colorFor(e)),
+                              title: Text(e.detail),
+                              subtitle: Text('${e.txDate} · ${_labelFor(e)} · auto'),
+                              trailing: Text(money(e.amount), style: TextStyle(fontWeight: FontWeight.w600, color: _amountColor(e))),
+                            )
+                          : Dismissible(
+                              key: ValueKey(e.id),
+                              direction: DismissDirection.endToStart,
+                              confirmDismiss: (_) => _confirmDelete(context, ref, e.id),
+                              background: Container(color: AppTheme.danger, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 16), child: const Icon(Icons.delete, color: Colors.white)),
+                              child: ListTile(
+                                leading: Icon(_iconFor(e), color: _colorFor(e)),
+                                title: Text(e.detail),
+                                subtitle: Text('${e.txDate} · ${_labelFor(e)}'),
+                                trailing: Text(money(e.amount), style: TextStyle(fontWeight: FontWeight.w600, color: _amountColor(e))),
+                              ),
+                            ),
+                  if (filtered.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
+                ],
+              );
+            },
           ),
         ],
       ),
     );
+  }
+
+  List<ManagerAccountEntry> _filterEntries(List<ManagerAccountEntry> entries) {
+    switch (_filter) {
+      case 'Recibidos':
+        return entries.where((e) => e.isPagoRecibido).toList();
+      case 'Realizados':
+        return entries.where((e) => e.isPagoRealizado).toList();
+      case 'Por cobrar':
+        return entries.where((e) => e.isPorCobrar).toList();
+      case 'Por pagar':
+        return entries.where((e) => e.txType == 'ManualPorPagar').toList();
+      default:
+        return entries;
+    }
+  }
+
+  Future<bool?> _confirmDelete(BuildContext context, WidgetRef ref, String id) {
+    return showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('Eliminar movimiento'),
+      content: const Text('¿Seguro que deseas eliminar este registro?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+        FilledButton(onPressed: () async {
+          Navigator.pop(ctx, true);
+          await ref.read(managerAccountRepositoryProvider).deleteEntry(id);
+        }, child: const Text('Eliminar')),
+      ],
+    ));
   }
 
   Future<void> _showManualDialog(BuildContext context, WidgetRef ref, bool porCobrar) async {
@@ -133,6 +248,12 @@ class ManagerAccountsScreen extends ConsumerWidget {
 
   Color _colorFor(ManagerAccountEntry e) => (e.isPorCobrar || e.isPagoRealizado) ? AppTheme.ok : AppTheme.danger;
 
+  Color _amountColor(ManagerAccountEntry e) {
+    // A favor (verde): Por cobrar, Pago recibido
+    // En contra (rojo): Por pagar, Pago realizado
+    return (e.isPorCobrar || e.isPagoRecibido) ? AppTheme.ok : AppTheme.danger;
+  }
+
   String _labelFor(ManagerAccountEntry e) {
     switch (e.txType) {
       case 'PagoRecibido': return 'Pago recibido';
@@ -143,7 +264,7 @@ class ManagerAccountsScreen extends ConsumerWidget {
   }
 }
 
-// Provider para el ajuste de cuentas admin-gerente
+// Provider para el ajuste de cuentas admin-gerente (legacy, mantenido por compatibilidad)
 final managerAdjustmentProvider = FutureProvider.autoDispose<ManagerAccountAdjustment>((ref) async {
   return ref.read(managerAccountRepositoryProvider).adjustment();
 });
@@ -153,14 +274,15 @@ class _AdjustmentView {
   final String balanceText;
   final bool managerOwes;
   final String cobrar;
+  final String empresa;
   final String pagar;
   final String made;
   final String received;
 
-  const _AdjustmentView({required this.headline, required this.balanceText, required this.managerOwes, required this.cobrar, required this.pagar, required this.made, required this.received});
+  const _AdjustmentView({required this.headline, required this.balanceText, required this.managerOwes, required this.cobrar, required this.empresa, required this.pagar, required this.made, required this.received});
 
   factory _AdjustmentView.from(ManagerAccountAdjustment adj) {
     final fmt = (double v) => money(v);
-    return _AdjustmentView(headline: adj.balance > 0 ? 'El gerente le debe al empleador' : adj.balance < 0 ? 'El empleador le debe al gerente' : 'Cuentas parejas', balanceText: fmt(adj.balance.abs()), managerOwes: adj.balance > 0, cobrar: fmt(adj.valoresPorCobrar), pagar: fmt(adj.valoresPorPagar), made: fmt(adj.pagosRealizados), received: fmt(adj.pagosRecibidos));
+    return _AdjustmentView(headline: adj.balance > 0 ? 'El gerente le debe al empleador' : adj.balance < 0 ? 'El empleador le debe al gerente' : 'Cuentas parejas', balanceText: fmt(adj.balance.abs()), managerOwes: adj.balance > 0, cobrar: fmt(adj.valoresPorCobrar), empresa: fmt(adj.valoresEmpresa), pagar: fmt(adj.valoresPorPagar), made: fmt(adj.pagosRealizados), received: fmt(adj.pagosRecibidos));
   }
 }

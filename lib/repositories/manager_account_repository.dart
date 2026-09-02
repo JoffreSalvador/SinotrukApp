@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../core/utils/account_adjustments.dart';
 import '../core/utils/payment_math.dart';
@@ -25,7 +26,7 @@ class ManagerAccountRepository {
     required double amount,
   }) async {
     await _client.from('manager_accounts').upsert({
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'id': const Uuid().v4(),
       'tx_type': porCobrar ? 'ManualPorCobrar' : 'ManualPorPagar',
       'tx_date': date,
       'detail': detail,
@@ -38,9 +39,17 @@ class ManagerAccountRepository {
     await _client.from('manager_accounts').upsert(entry.toMap());
   }
 
+  Future<void> deleteEntry(String id) async {
+    await _client.from('manager_accounts').delete().eq('id', id);
+  }
+
   Future<ManagerAccountAdjustment> adjustment() async {
     final all = await entries();
-    double cobrar = 0, pagar = 0, recibidos = 0, realizados = 0;
+    return _computeAdjustment(all);
+  }
+
+  ManagerAccountAdjustment _computeAdjustment(List<ManagerAccountEntry> all) {
+    double cobrar = 0, empresa = 0, pagar = 0, recibidos = 0, realizados = 0;
     for (final e in all) {
       if (e.isPorCobrar) {
         cobrar += e.amount;
@@ -52,8 +61,10 @@ class ManagerAccountRepository {
         realizados += e.amount;
       }
     }
+    // Note: valoresEmpresa is computed from trips in the stream provider
     return ManagerAccountAdjustment(
       valoresPorCobrar: PaymentMath.round2(cobrar),
+      valoresEmpresa: 0,
       valoresPorPagar: PaymentMath.round2(pagar),
       pagosRealizados: PaymentMath.round2(realizados),
       pagosRecibidos: PaymentMath.round2(recibidos),

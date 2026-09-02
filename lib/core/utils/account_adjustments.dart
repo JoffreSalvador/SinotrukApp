@@ -40,25 +40,28 @@ class DriverAccountAdjustment {
 /// Resultado del ajuste de cuentas entre admin (empleador) y gerente.
 ///
 /// Logica de negocio (formula del requerimiento):
-///   balance = valoresPorCobrar - valoresPorPagar
+///   balance = valoresPorCobrar + valoresEmpresa - valoresPorPagar
 ///           + pagosRealizados - pagosRecibidos
 ///
 /// balance > 0  -> el gerente LE DEBE al empleador.
 /// balance < 0  -> el empleador DEBE al gerente.
 class ManagerAccountAdjustment {
   final double valoresPorCobrar;
+  final double valoresEmpresa;
   final double valoresPorPagar;
   final double pagosRealizados;
   final double pagosRecibidos;
 
   const ManagerAccountAdjustment({
     required this.valoresPorCobrar,
+    required this.valoresEmpresa,
     required this.valoresPorPagar,
     required this.pagosRealizados,
     required this.pagosRecibidos,
   });
 
-  double get balance => _round2(valoresPorCobrar -
+  double get balance => _round2(valoresPorCobrar +
+      valoresEmpresa -
       valoresPorPagar +
       pagosRealizados -
       pagosRecibidos);

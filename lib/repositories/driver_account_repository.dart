@@ -54,8 +54,18 @@ class DriverAccountRepository {
           .select()
           .filter('trip_id', 'in', '(${tripIds.join(',')})')
           .eq('payment_method', 'Efectivo');
-      viajesEfectivo = PaymentMath.sum(
+      final passengersEfectivo = PaymentMath.sum(
           (passengers as List).map((r) => (r['cost'] as num?)?.toDouble() ?? 0.0));
+
+      final packages = await _client
+          .from('trip_packages')
+          .select()
+          .filter('trip_id', 'in', '(${tripIds.join(',')})')
+          .eq('payment_method', 'Efectivo');
+      final packagesEfectivo = PaymentMath.sum(
+          (packages as List).map((r) => (r['cost'] as num?)?.toDouble() ?? 0.0));
+
+      viajesEfectivo = passengersEfectivo + packagesEfectivo;
     }
 
     final entries = await entriesOf(driverId);
