@@ -49,7 +49,7 @@ class ManagerAccountRepository {
   }
 
   ManagerAccountAdjustment _computeAdjustment(List<ManagerAccountEntry> all) {
-    double cobrar = 0, empresa = 0, pagar = 0, recibidos = 0, realizados = 0;
+    double cobrar = 0, pagar = 0, recibidos = 0, realizados = 0;
     for (final e in all) {
       if (e.isPorCobrar) {
         cobrar += e.amount;
@@ -61,10 +61,8 @@ class ManagerAccountRepository {
         realizados += e.amount;
       }
     }
-    // Note: valoresEmpresa is computed from trips in the stream provider
     return ManagerAccountAdjustment(
       valoresPorCobrar: PaymentMath.round2(cobrar),
-      valoresEmpresa: 0,
       valoresPorPagar: PaymentMath.round2(pagar),
       pagosRealizados: PaymentMath.round2(realizados),
       pagosRecibidos: PaymentMath.round2(recibidos),

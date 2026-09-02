@@ -316,11 +316,8 @@ final managerCombinedEntriesProvider = StreamProvider.autoDispose.family<List<Ma
   );
 });
 
-// Real-time adjustment derived from combined entries stream + trips for empresa values
-ManagerAccountAdjustment _computeAdjustment(
-  List<ManagerAccountEntry> all, {
-  double valoresEmpresa = 0,
-}) {
+// Real-time adjustment derived from combined entries stream (auto empresa entries already included)
+ManagerAccountAdjustment _computeAdjustment(List<ManagerAccountEntry> all) {
   double cobrar = 0, pagar = 0, recibidos = 0, realizados = 0;
   for (final e in all) {
     if (e.isPorCobrar) {
@@ -335,7 +332,6 @@ ManagerAccountAdjustment _computeAdjustment(
   }
   return ManagerAccountAdjustment(
     valoresPorCobrar: PaymentMath.round2(cobrar),
-    valoresEmpresa: PaymentMath.round2(valoresEmpresa),
     valoresPorPagar: PaymentMath.round2(pagar),
     pagosRealizados: PaymentMath.round2(realizados),
     pagosRecibidos: PaymentMath.round2(recibidos),
@@ -344,42 +340,6 @@ ManagerAccountAdjustment _computeAdjustment(
 
 final managerAdjustmentStreamProvider = StreamProvider.autoDispose.family<ManagerAccountAdjustment, ({String from, String to})>((ref, range) {
   final entriesStream = ref.watch(managerCombinedEntriesProvider(range).stream);
-  final tripsStream = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream);
-  final passengersStream = ref.watch(passengersStreamProvider.stream);
-  final packagesStream = ref.watch(packagesStreamProvider.stream);
   
-  return StreamZip([
-    entriesStream,
-    tripsStream,
-    passengersStream,
-    packagesStream,
-  ]).map(
-    (values) {
-      final entries = values[0] as List<ManagerAccountEntry>;
-      final trips = values[1] as List<Trip>;
-      final passengers = values[2] as List<TripPassenger>;
-      final packages = values[3] as List<TripPackage>;
-      
-      // Calculate valoresEmpresa: sum of "Empresa" payment method for passengers + packages in the date range
-      final tripIds = trips.map((t) => t.id).toSet();
-      
-      double valoresEmpresa = 0;
-      
-      // Empresa passengers
-      for (final p in passengers) {
-        if (tripIds.contains(p.tripId) && p.paymentMethod.toLowerCase() == 'empresa') {
-          valoresEmpresa += p.cost;
-        }
-      }
-      
-      // Empresa packages
-      for (final p in packages) {
-        if (tripIds.contains(p.tripId) && p.paymentMethod.toLowerCase() == 'empresa') {
-          valoresEmpresa += p.cost;
-        }
-      }
-      
-      return _computeAdjustment(entries, valoresEmpresa: valoresEmpresa);
-    },
-  );
+  return entriesStream.map(_computeAdjustment);
 });

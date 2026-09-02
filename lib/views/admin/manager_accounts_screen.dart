@@ -59,7 +59,6 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
                     const SizedBox(height: 8),
                     Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: [
                       Chip(label: Text('Por cobrar: ${view.cobrar}')),
-                      Chip(label: Text('Empresa: ${view.empresa}')),
                       Chip(label: Text('Por pagar: ${view.pagar}')),
                       Chip(label: Text('Realizados: ${view.made}')),
                       Chip(label: Text('Recibidos: ${view.received}')),
@@ -274,15 +273,14 @@ class _AdjustmentView {
   final String balanceText;
   final bool managerOwes;
   final String cobrar;
-  final String empresa;
   final String pagar;
   final String made;
   final String received;
 
-  const _AdjustmentView({required this.headline, required this.balanceText, required this.managerOwes, required this.cobrar, required this.empresa, required this.pagar, required this.made, required this.received});
+  const _AdjustmentView({required this.headline, required this.balanceText, required this.managerOwes, required this.cobrar, required this.pagar, required this.made, required this.received});
 
   factory _AdjustmentView.from(ManagerAccountAdjustment adj) {
     final fmt = (double v) => money(v);
-    return _AdjustmentView(headline: adj.balance > 0 ? 'El gerente le debe al empleador' : adj.balance < 0 ? 'El empleador le debe al gerente' : 'Cuentas parejas', balanceText: fmt(adj.balance.abs()), managerOwes: adj.balance > 0, cobrar: fmt(adj.valoresPorCobrar), empresa: fmt(adj.valoresEmpresa), pagar: fmt(adj.valoresPorPagar), made: fmt(adj.pagosRealizados), received: fmt(adj.pagosRecibidos));
+    return _AdjustmentView(headline: adj.balance > 0 ? 'El gerente le debe al empleador' : adj.balance < 0 ? 'El empleador le debe al gerente' : 'Cuentas parejas', balanceText: fmt(adj.balance.abs()), managerOwes: adj.balance > 0, cobrar: fmt(adj.valoresPorCobrar), pagar: fmt(adj.valoresPorPagar), made: fmt(adj.pagosRealizados), received: fmt(adj.pagosRecibidos));
   }
 }

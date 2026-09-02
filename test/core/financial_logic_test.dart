@@ -67,12 +67,11 @@ void main() {
   });
 
   group('ManagerAccountAdjustment', () {
-    // Formula: porCobrar + valoresEmpresa - porPagar + realizados - recibidos
+    // Formula: porCobrar - porPagar + realizados - recibidos
     test('gerente le debe al empleador con valores positivos', () {
       final adj = ManagerAccountAdjustment(
-        valoresPorCobrar: 100,
-        valoresEmpresa: 400, // viajes Empresa
-        valoresPorPagar: 200, // 10% gerente + manuales
+        valoresPorCobrar: 500,
+        valoresPorPagar: 200,
         pagosRealizados: 300,
         pagosRecibidos: 100,
       );
@@ -83,7 +82,6 @@ void main() {
     test('empleador le debe al gerente cuando pago de mas', () {
       final adj = ManagerAccountAdjustment(
         valoresPorCobrar: 100,
-        valoresEmpresa: 0,
         valoresPorPagar: 400,
         pagosRealizados: 0,
         pagosRecibidos: 50,
@@ -95,7 +93,6 @@ void main() {
     test('balance cero cuando todo cuadra', () {
       final adj = ManagerAccountAdjustment(
         valoresPorCobrar: 300,
-        valoresEmpresa: 0,
         valoresPorPagar: 100,
         pagosRealizados: 0,
         pagosRecibidos: 200,
