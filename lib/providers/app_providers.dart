@@ -38,29 +38,37 @@ class AuthState extends AsyncNotifier<Profile?> {
     return ref.read(authServiceProvider).maybeCurrentProfile();
   }
 
-  Future<void> login(String username, String password) async {
+  Future<bool> login(String username, String password) async {
+    // Capturar estado actual ANTES de cambiar a loading
+    final previousState = state;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
-      final profile =
-          await ref.read(authServiceProvider).login(
-                username: username,
-                password: password,
-              );
-      return profile;
-    });
+    try {
+      final profile = await ref.read(authServiceProvider).login(
+            username: username,
+            password: password,
+          );
+      state = AsyncData(profile);
+      return true;
+    } catch (e) {
+      // Restaurar estado anterior (que era AsyncData(null) al inicio)
+      state = previousState;
+      rethrow;
+    }
   }
 
   Future<void> bootstrapAdmin(String username, String password) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() async {
+    try {
       await ref.read(authServiceProvider).bootstrapAdmin(
             username: username,
             password: password,
           );
-      final profile =
-          await ref.read(authServiceProvider).currentProfile();
-      return profile;
-    });
+      final profile = await ref.read(authServiceProvider).currentProfile();
+      state = AsyncData(profile);
+    } catch (e) {
+      state = const AsyncData(null);
+      rethrow;
+    }
   }
 
   Future<void> logout() async {

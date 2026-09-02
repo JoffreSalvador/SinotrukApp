@@ -35,22 +35,31 @@ class SupabaseAuthService extends AuthService {
     required String password,
     String name = 'Administrador',
   }) async {
-    await client.auth.signUp(
-      email: syntheticEmail(username),
-      password: password,
-      data: {'name': name, 'username': username, 'role': 'admin'},
-    );
+    try {
+      await client.auth.signUp(
+        email: syntheticEmail(username),
+        password: password,
+        data: {'name': name, 'username': username, 'role': 'admin'},
+      );
+    } on AuthException catch (e) {
+      throw AuthException(e.message);
+    }
   }
 
   Future<Profile> login({
     required String username,
     required String password,
   }) async {
-    await client.auth.signInWithPassword(
-      email: syntheticEmail(username),
-      password: password,
-    );
-    return currentProfile();
+    try {
+      await client.auth.signInWithPassword(
+        email: syntheticEmail(username),
+        password: password,
+      );
+      return currentProfile();
+    } on AuthException catch (e) {
+      // Re-lanzar con mensaje original de Supabase para mejor diagnóstico
+      throw AuthException(e.message);
+    }
   }
 
   /// Perfil del usuario logueado. Lanza si está deshabilitado.

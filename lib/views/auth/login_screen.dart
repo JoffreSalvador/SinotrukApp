@@ -44,27 +44,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       } else {
         await auth.login(_usernameCtrl.text.trim(), _passwordCtrl.text);
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_friendlyError(e))),
-        );
-      }
+    } catch (_) {
+      // El error se muestra en AppRoot via ref.listen
     }
-  }
-
-  String _friendlyError(Object e) {
-    final msg = e.toString();
-    if (msg.contains('Invalid login credentials')) {
-      return 'Usuario o contraseña incorrectos.';
-    }
-    if (msg.contains('deshabilitado')) {
-      return msg.replaceFirst('AuthException: ', '');
-    }
-    if (msg.toLowerCase().contains('at least')) {
-      return 'La contraseña es demasiado corta.';
-    }
-    return 'Error de autenticación. Revisa tu conexión e inténtalo de nuevo.';
   }
 
   @override
