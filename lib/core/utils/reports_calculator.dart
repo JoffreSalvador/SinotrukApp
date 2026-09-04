@@ -193,13 +193,80 @@ class ReportsCalculator {
     return rows;
   }
 
-  static double _avg(Iterable<double> values) {
-    if (values.isEmpty) return 0;
-    return PaymentMath.round2(values.reduce((a, b) => a + b) / values.length);
+  /// Reporte 6: Detalle de cuentas.
+  /// Separa ingresos por Empresa y Efectivo (pasajeros y encomiendas por separado)
+  /// y calcula el 10% general.
+  static AccountDetailReport accountDetail({
+    required List<TripPassenger> passengers,
+    required List<TripPackage> packages,
+    required List<Trip> trips,
+    required String from,
+    required String to,
+  }) {
+    // Build trip date map for date lookups
+    final tripDateMap = {for (final t in trips) t.id: t.tripDate};
+
+    final empresaPassengers = passengers
+        .where((p) {
+          final tripDate = tripDateMap[p.tripId] ?? '';
+          return p.paymentMethod == 'Empresa' && tripDate.compareTo(from) >= 0 && tripDate.compareTo(to) <= 0;
+        })
+        .toList();
+    final empresaPackages = packages
+        .where((p) {
+          final tripDate = tripDateMap[p.tripId] ?? '';
+          return p.paymentMethod == 'Empresa' && tripDate.compareTo(from) >= 0 && tripDate.compareTo(to) <= 0;
+        })
+        .toList();
+    final efectivoPassengers = passengers
+        .where((p) {
+          final tripDate = tripDateMap[p.tripId] ?? '';
+          return p.paymentMethod == 'Efectivo' && tripDate.compareTo(from) >= 0 && tripDate.compareTo(to) <= 0;
+        })
+        .toList();
+    final efectivoPackages = packages
+        .where((p) {
+          final tripDate = tripDateMap[p.tripId] ?? '';
+          return p.paymentMethod == 'Efectivo' && tripDate.compareTo(from) >= 0 && tripDate.compareTo(to) <= 0;
+        })
+        .toList();
+
+    final empresaPassengerTotal = PaymentMath.sum(empresaPassengers.map((p) => p.cost));
+    final empresaPackageTotal = PaymentMath.sum(empresaPackages.map((p) => p.cost));
+    final efectivoPassengerTotal = PaymentMath.sum(efectivoPassengers.map((p) => p.cost));
+    final efectivoPackageTotal = PaymentMath.sum(efectivoPackages.map((p) => p.cost));
+
+    final totalIngresos = empresaPassengerTotal + empresaPackageTotal + efectivoPassengerTotal + efectivoPackageTotal;
+    final commission10 = PaymentMath.round2(totalIngresos * 0.1);
+
+    return AccountDetailReport(
+      empresaPassengers: empresaPassengers
+          .map((p) => AccountDetailRow(date: tripDateMap[p.tripId] ?? '', detail: p.route, value: p.cost, type: 'Pasajero'))
+          .toList(),
+      empresaPackages: empresaPackages
+          .map((p) => AccountDetailRow(date: tripDateMap[p.tripId] ?? '', detail: p.route, value: p.cost, type: 'Encomienda'))
+          .toList(),
+      efectivoPassengers: efectivoPassengers
+          .map((p) => AccountDetailRow(date: tripDateMap[p.tripId] ?? '', detail: p.route, value: p.cost, type: 'Pasajero'))
+          .toList(),
+      efectivoPackages: efectivoPackages
+          .map((p) => AccountDetailRow(date: tripDateMap[p.tripId] ?? '', detail: p.route, value: p.cost, type: 'Encomienda'))
+          .toList(),
+      empresaPassengerTotal: empresaPassengerTotal,
+      empresaPackageTotal: empresaPackageTotal,
+      efectivoPassengerTotal: efectivoPassengerTotal,
+      efectivoPackageTotal: efectivoPackageTotal,
+      commission10: commission10,
+    );
   }
 
   static String _withDetail(String? detail) =>
       detail == null ? '' : ' ($detail)';
+
+  static double _avg(Iterable<double> values) {
+    if (values.isEmpty) return 0;
+    return PaymentMath.round2(values.reduce((a, b) => a + b) / values.length);
+  }
 }
 
 extension<T> on Iterable<T> {
@@ -311,4 +378,46 @@ class IncomeExpenseRow {
     required this.value,
     required this.isIncome,
   });
+}
+
+class AccountDetailRow {
+  final String date;
+  final String detail;
+  final double value;
+  final String type; // 'Pasajero' or 'Encomienda'
+
+  const AccountDetailRow({
+    required this.date,
+    required this.detail,
+    required this.value,
+    required this.type,
+  });
+}
+
+class AccountDetailReport {
+  final List<AccountDetailRow> empresaPassengers;
+  final List<AccountDetailRow> empresaPackages;
+  final List<AccountDetailRow> efectivoPassengers;
+  final List<AccountDetailRow> efectivoPackages;
+  final double empresaPassengerTotal;
+  final double empresaPackageTotal;
+  final double efectivoPassengerTotal;
+  final double efectivoPackageTotal;
+  final double commission10;
+
+  const AccountDetailReport({
+    required this.empresaPassengers,
+    required this.empresaPackages,
+    required this.efectivoPassengers,
+    required this.efectivoPackages,
+    required this.empresaPassengerTotal,
+    required this.empresaPackageTotal,
+    required this.efectivoPassengerTotal,
+    required this.efectivoPackageTotal,
+    required this.commission10,
+  });
+
+  double get empresaTotal => empresaPassengerTotal + empresaPackageTotal;
+  double get efectivoTotal => efectivoPassengerTotal + efectivoPackageTotal;
+  double get totalIngresos => empresaTotal + efectivoTotal;
 }

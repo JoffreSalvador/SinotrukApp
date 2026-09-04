@@ -278,11 +278,145 @@ class _RoutesTab extends ConsumerWidget {
             Chip(label: Text('Gas: ${money(r.avgGasolina)}')),
             Chip(label: Text('Ing: ${money(r.avgIngreso)}')),
             Chip(label: Text('Egr: ${money(r.avgEgreso)}')),
-            Chip(label: Text('Neto: ${money(r.neto)}'), backgroundColor: r.neto >= 0 ? Colors.green.withValues(alpha: .15) : AppTheme.danger.withValues(alpha: .15)),
+            Chip(label: Text('Neto: ${money(r.neto)}'), backgroundColor: r.neto >= 0 ? Colors.green.withValues(alpha: .15) : Colors.red.withValues(alpha: .15)),
           ]))),
           if (rows.isEmpty) const Center(child: Text('Sin datos en el periodo')),
         ]);
       },
+    );
+  }
+}
+
+/// Pestaña Detalle Cuentas
+class _AccountDetailTab extends ConsumerWidget {
+  final ({String from, String to}) range;
+  const _AccountDetailTab({required this.range});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final passengersAsync = ref.watch(passengersStreamProvider);
+    final packagesAsync = ref.watch(packagesStreamProvider);
+    final tripsAsync = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)));
+
+    return _Async3<TripPassenger, TripPackage, Trip>(
+      a: passengersAsync,
+      b: packagesAsync,
+      c: tripsAsync,
+      builder: (context, passengers, packages, trips) {
+        final report = ReportsCalculator.accountDetail(
+          passengers: passengers,
+          packages: packages,
+          trips: trips,
+          from: range.from,
+          to: range.to,
+        );
+        return ListView(
+          padding: const EdgeInsets.all(8),
+          children: [
+            // Sección Empresa
+            _buildSection(
+              context,
+              'Empresa',
+              report.empresaPassengers,
+              report.empresaPackages,
+              report.empresaPassengerTotal,
+              report.empresaPackageTotal,
+              Colors.blue,
+            ),
+            const SizedBox(height: 16),
+            // Sección Efectivo
+            _buildSection(
+              context,
+              'Efectivo',
+              report.efectivoPassengers,
+              report.efectivoPackages,
+              report.efectivoPassengerTotal,
+              report.efectivoPackageTotal,
+              Colors.green,
+            ),
+            const SizedBox(height: 16),
+            // Resumen 10%
+            Card(
+              color: Theme.of(context).colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Text('Comisión 10% (Pasajeros + Encomiendas)',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(money(report.commission10),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            )),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSection(
+    BuildContext context,
+    String title,
+    List<AccountDetailRow> passengers,
+    List<AccountDetailRow> packages,
+    double passengerTotal,
+    double packageTotal,
+    Color color,
+  ) {
+    final total = passengerTotal + packageTotal;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+            const Spacer(),
+            Chip(
+              label: Text('Total: ${money(passengerTotal + packageTotal)}'),
+              backgroundColor: Colors.grey.withValues(alpha: 0.2),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (passengers.isNotEmpty) ...[
+          Text('Pasajeros (${passengers.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue)),
+          const SizedBox(height: 4),
+          ...passengers.map((p) => ListTile(
+            dense: true,
+            leading: const Icon(Icons.person, size: 20, color: Colors.blue),
+            title: Text(p.detail),
+            subtitle: Text(p.date),
+            trailing: Text(money(p.value), style: const TextStyle(fontWeight: FontWeight.w500)),
+          )),
+          const SizedBox(height: 8),
+        ],
+        if (packages.isNotEmpty) ...[
+          Text('Encomiendas (${packages.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.orange)),
+          const SizedBox(height: 4),
+          ...packages.map((p) => ListTile(
+            dense: true,
+            leading: const Icon(Icons.inventory_2, size: 20, color: Colors.orange),
+            title: Text(p.detail),
+            subtitle: Text(p.date),
+            trailing: Text(money(p.value), style: const TextStyle(fontWeight: FontWeight.w500)),
+          )),
+          const SizedBox(height: 8),
+        ],
+        Card(
+          color: Theme.of(context).colorScheme.secondaryContainer,
+          child: ListTile(
+            title: Text('Total $title', style: const TextStyle(fontWeight: FontWeight.bold)),
+            trailing: Text(money(total), style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSecondaryContainer)),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }
@@ -444,7 +578,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           bottom: TabBar(isScrollable: true, tabs: const [
             Tab(text: 'Viajes'),
             Tab(text: 'Conductor'),
-            Tab(text: 'Rutas'),
+            Tab(text: 'Detalle cuentas'),
             Tab(text: 'Empresa'),
             Tab(text: 'Ing/Egr'),
           ]),
@@ -463,7 +597,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             child: TabBarView(children: [
               _TripsTab(range: (from: _range.from, to: _range.to, driverId: _selectedDriverId)),
               _DriverTab(range: _range, selectedDriverId: _selectedDriverId, onDriverChanged: (v) => setState(() => _selectedDriverId = v)),
-              const _RoutesTab(),
+              _AccountDetailTab(range: _range),
               _CompanyTab(range: _range),
               _IncomeExpenseTab(range: _range),
             ]),
