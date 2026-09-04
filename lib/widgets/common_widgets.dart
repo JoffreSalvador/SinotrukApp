@@ -79,7 +79,7 @@ class DateFilterBar extends ConsumerWidget {
           children: [
             SegmentedButton<bool>(
               segments: const [
-                ButtonSegment(value: true, label: Text('Por aÃ±o')),
+                ButtonSegment(value: true, label: Text('Por año')),
                 ButtonSegment(value: false, label: Text('Desde - Hasta')),
               ],
               selected: {byYear},
@@ -89,7 +89,7 @@ class DateFilterBar extends ConsumerWidget {
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
                 initialValue: selectedYear ?? currentYear,
-                decoration: labelText('AÃ±o'),
+                decoration: labelText('Año'),
                 items: [
                   for (var y = currentYear; y >= currentYear - 10; y--)
                     DropdownMenuItem(value: y, child: Text('$y'))

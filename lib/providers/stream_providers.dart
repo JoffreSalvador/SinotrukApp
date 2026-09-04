@@ -13,6 +13,12 @@ import '../models/trip.dart';
 import '../models/vehicle.dart';
 import 'core_providers.dart';
 
+/// Prepends an initial value to a stream so StreamZip can emit immediately.
+Stream<T> _withInitial<T>(Stream<T> stream, T initial) async* {
+  yield initial;
+  yield* stream;
+}
+
 // ================== STREAMS (Realtime) ==================
 // NOTA: .stream(primaryKey: ['id']) devuelve TODAS las filas.
 // Filtramos en Dart con .map() porque la API de streams no encadena .eq().
@@ -236,10 +242,10 @@ List<ManagerAccountEntry> _computeEmpresaEntries({
 }
 
 final managerCommissionEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final tripsStream = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream);
-  final passengersStream = ref.watch(passengersStreamProvider.stream);
-  final packagesStream = ref.watch(packagesStreamProvider.stream);
-  final driversStream = ref.watch(driversStreamProvider.stream);
+  final tripsStream = _withInitial(ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream), <Trip>[]);
+  final passengersStream = _withInitial(ref.watch(passengersStreamProvider.stream), <TripPassenger>[]);
+  final packagesStream = _withInitial(ref.watch(packagesStreamProvider.stream), <TripPackage>[]);
+  final driversStream = _withInitial(ref.watch(driversStreamProvider.stream), <Profile>[]);
   
   return StreamZip([
     tripsStream,
@@ -260,11 +266,11 @@ final managerCommissionEntriesProvider = StreamProvider.autoDispose.family<List<
 
 // Empresa entries provider
 final managerEmpresaEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final tripsStream = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream);
-  final passengersStream = ref.watch(passengersStreamProvider.stream);
-  final packagesStream = ref.watch(packagesStreamProvider.stream);
-  final vehiclesStream = ref.watch(vehiclesStreamProvider.stream);
-  final assignmentsStream = ref.watch(assignmentsStreamProvider.stream);
+  final tripsStream = _withInitial(ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream), <Trip>[]);
+  final passengersStream = _withInitial(ref.watch(passengersStreamProvider.stream), <TripPassenger>[]);
+  final packagesStream = _withInitial(ref.watch(packagesStreamProvider.stream), <TripPackage>[]);
+  final vehiclesStream = _withInitial(ref.watch(vehiclesStreamProvider.stream), <Vehicle>[]);
+  final assignmentsStream = _withInitial(ref.watch(assignmentsStreamProvider.stream), <VehicleAssignment>[]);
   
   return StreamZip([
     tripsStream,
@@ -303,9 +309,9 @@ final managerEmpresaEntriesProvider = StreamProvider.autoDispose.family<List<Man
 
 // Combined entries (manual + auto commission + auto empresa)
 final managerCombinedEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final manualEntriesStream = ref.watch(managerEntriesStreamProvider.stream);
-  final commissionEntriesStream = ref.watch(managerCommissionEntriesProvider(range).stream);
-  final empresaEntriesStream = ref.watch(managerEmpresaEntriesProvider(range).stream);
+  final manualEntriesStream = _withInitial(ref.watch(managerEntriesStreamProvider.stream), <ManagerAccountEntry>[]);
+  final commissionEntriesStream = _withInitial(ref.watch(managerCommissionEntriesProvider(range).stream), <ManagerAccountEntry>[]);
+  final empresaEntriesStream = _withInitial(ref.watch(managerEmpresaEntriesProvider(range).stream), <ManagerAccountEntry>[]);
   
   return StreamZip([
     manualEntriesStream,
