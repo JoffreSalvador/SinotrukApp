@@ -42,26 +42,43 @@ class ReportsCalculator {
     required Map<String, String> driverNames,
     required List<Trip> trips,
     required List<TripPassenger> passengers,
+    required List<TripPackage> packages,
     required List<TripExpense> expenses,
   }) {
     final rows = <DriverReportRow>[];
+    final paidPerTrip = <String, double>{};
     for (final trip in trips.where((t) => t.driverId == driverId)) {
       final paidToDriver = PaymentMath.sum(expenses
           .where((e) => e.tripId == trip.id && e.category == 'Conductor')
           .map((e) => e.amount));
+      paidPerTrip[trip.id] = paidToDriver;
+      
+      // Pasajeros
       for (final p in passengers.where((p) => p.tripId == trip.id)) {
         rows.add(DriverReportRow(
           date: trip.tripDate,
           route: p.route,
           tripValue: p.cost,
           paidToDriver: paidToDriver,
+          type: 'Pasajero',
+        ));
+      }
+      
+      // Encomiendas
+      for (final p in packages.where((p) => p.tripId == trip.id)) {
+        rows.add(DriverReportRow(
+          date: trip.tripDate,
+          route: p.route,
+          tripValue: p.cost,
+          paidToDriver: paidToDriver,
+          type: 'Encomienda',
         ));
       }
     }
     return DriverReport(
       driverName: driverNames[driverId] ?? driverId,
       rows: rows,
-      totalPaid: PaymentMath.sum(rows.map((r) => r.paidToDriver)),
+      totalPaid: PaymentMath.sum(paidPerTrip.values),
     );
   }
 
@@ -308,12 +325,14 @@ class DriverReportRow {
   final String route;
   final double tripValue;
   final double paidToDriver;
+  final String type; // 'Pasajero' or 'Encomienda'
 
   const DriverReportRow({
     required this.date,
     required this.route,
     required this.tripValue,
     required this.paidToDriver,
+    required this.type,
   });
 }
 

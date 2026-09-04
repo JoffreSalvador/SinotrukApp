@@ -50,7 +50,7 @@ class AdminRepository {
   }) async {
     final current = await assignments();
     for (final a in current.where((a) => a.isActive)) {
-      if (a.vehicleId == vehicleId || a.driverId == driverId) {
+      if (a.driverId == driverId) {
         await _client.from('vehicle_assignments').update({
           'is_active': false,
           'unassigned_date': date,

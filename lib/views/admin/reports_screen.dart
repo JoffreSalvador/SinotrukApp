@@ -156,14 +156,16 @@ class _DriverTab extends ConsumerWidget {
     final driversAsync = ref.watch(driversStreamProvider);
     final tripsAsync = ref.watch(tripsStreamProvider((from: fromIso, to: toIso, driverId: null)));
     final passengersAsync = ref.watch(passengersStreamProvider);
+    final packagesAsync = ref.watch(packagesStreamProvider);
     final expensesAsync = ref.watch(expensesStreamProvider);
 
-    return _Async4<Profile, Trip, TripPassenger, TripExpense>(
+    return _Async5<Profile, Trip, TripPassenger, TripPackage, TripExpense>(
       a: driversAsync,
       b: tripsAsync,
       c: passengersAsync,
-      d: expensesAsync,
-      builder: (context, drivers, trips, passengers, expenses) {
+      d: packagesAsync,
+      e: expensesAsync,
+      builder: (context, drivers, trips, passengers, packages, expenses) {
         if (drivers.isEmpty) return const Center(child: Text('Sin conductores registrados'));
         final driverId = selectedDriverId ?? drivers.first.id;
         return _DriverTabInner(
@@ -171,6 +173,7 @@ class _DriverTab extends ConsumerWidget {
           drivers: drivers,
           trips: trips,
           passengers: passengers,
+          packages: packages,
           expenses: expenses,
           onDriverChanged: onDriverChanged,
         );
@@ -184,19 +187,20 @@ class _DriverTabInner extends ConsumerWidget {
   final List<Profile> drivers;
   final List<Trip> trips;
   final List<TripPassenger> passengers;
+  final List<TripPackage> packages;
   final List<TripExpense> expenses;
   final ValueChanged<String?> onDriverChanged;
-  const _DriverTabInner({required this.driverId, required this.drivers, required this.trips, required this.passengers, required this.expenses, required this.onDriverChanged});
+  const _DriverTabInner({required this.driverId, required this.drivers, required this.trips, required this.passengers, required this.packages, required this.expenses, required this.onDriverChanged});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final driverNames = {for (final d in drivers) d.id: d.name};
-    final report = ReportsCalculator.byDriver(driverId: driverId, driverNames: driverNames, trips: trips, passengers: passengers, expenses: expenses);
+    final report = ReportsCalculator.byDriver(driverId: driverId, driverNames: driverNames, trips: trips, passengers: passengers, packages: packages, expenses: expenses);
     final totalValue = PaymentMath.sum(report.rows.map((r) => r.tripValue));
     return ListView(padding: const EdgeInsets.all(8), children: [
       DropdownButtonFormField<String>(initialValue: driverId, items: driverNames.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(), onChanged: onDriverChanged, decoration: const InputDecoration(labelText: 'Conductor')),
       const SizedBox(height: 8),
-      ...report.rows.map((r) => ListTile(title: Text(r.route), subtitle: Text(r.date), trailing: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [Text('Viaje: ${money(r.tripValue)}'), Text('Pagado: ${money(r.paidToDriver)}', style: const TextStyle(fontSize: 12))]))),
+      ...report.rows.map((r) => ListTile(title: Text(r.route), subtitle: Text('${r.date} · ${r.type}'), trailing: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [Text('Viaje: ${money(r.tripValue)}'), Text('Pagado: ${money(r.paidToDriver)}', style: const TextStyle(fontSize: 12))]))),
       Card(color: Theme.of(context).colorScheme.secondaryContainer, child: Padding(padding: const EdgeInsets.all(16), child: Column(children: [Text('Valor de viajes: ${money(totalValue)}'), const SizedBox(height: 4), Text('TOTAL PAGADO AL CONDUCTOR: ${money(report.totalPaid)}', style: const TextStyle(fontWeight: FontWeight.bold))]))),
     ]);
   }

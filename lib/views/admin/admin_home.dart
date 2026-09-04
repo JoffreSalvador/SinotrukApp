@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/profile.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/common_widgets.dart';
+import 'driver_accounts_admin_screen.dart';
 import 'fleet_screen.dart';
 import 'manager_accounts_screen.dart';
 import 'reports_screen.dart';
@@ -31,6 +32,7 @@ class _AdminHomeState extends ConsumerState<AdminHome> {
       const FleetScreen(),
       const VehicleExpensesScreen(),
       const ManagerAccountsScreen(),
+      const DriverAccountsAdminScreen(),
     ];
 
     return Scaffold(
@@ -60,6 +62,7 @@ class _AdminHomeState extends ConsumerState<AdminHome> {
           NavigationDestination(icon: Icon(Icons.local_shipping), label: 'Flota'),
           NavigationDestination(icon: Icon(Icons.receipt_long), label: 'Gastos V.'),
           NavigationDestination(icon: Icon(Icons.account_balance), label: 'Gerente'),
+          NavigationDestination(icon: Icon(Icons.account_balance_wallet), label: 'Cuentas'),
         ],
       ),
     );

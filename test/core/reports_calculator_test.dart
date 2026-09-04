@@ -77,12 +77,13 @@ void main() {
         driverNames: driverNames,
         trips: trips,
         passengers: passengers,
+        packages: [],
         expenses: expenses,
       );
       // d1 tiene t1 (3 pax) y t3 (1 pax) -> 4 filas
       expect(report.rows.length, 4);
-      // t1 pagó 10 a conductor (3 filas), t3 no pagó conductor (1 fila)
-      expect(report.totalPaid, 30);
+      // t1 pagó 10 a conductor (1 pago por viaje), t3 no pagó conductor (1 fila)
+      expect(report.totalPaid, 10);
       final t1rows =
           report.rows.where((r) => r.date == '2026-03-10').toList();
       for (final r in t1rows) {
@@ -96,6 +97,7 @@ void main() {
         driverNames: driverNames,
         trips: trips,
         passengers: passengers,
+        packages: [],
         expenses: expenses,
       );
       expect(report.rows, isEmpty);
