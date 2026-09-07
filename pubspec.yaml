@@ -29,9 +29,17 @@ dev_dependencies:
     sdk: flutter
   mocktail: ^1.0.4
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
   assets:
     - .env
     - assets/images/LogoSinotruk.png
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/LogoSinotruk.png"
+  adaptive_icon_background: "#1A1D11"
+  adaptive_icon_foreground: "assets/images/LogoSinotruk.png"

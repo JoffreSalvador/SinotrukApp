@@ -26,6 +26,28 @@ void main() {
       expect(expense.isRefundableCategory, isTrue);
     });
 
+    test('ManagerAccountEntry lee created_at opcional', () {
+      final withDate = ManagerAccountEntry.fromMap({
+        'id': 'm1',
+        'tx_type': 'PagoRecibido',
+        'tx_date': '2026-09-07',
+        'detail': 'Abono',
+        'amount': 10,
+        'created_at': '2026-09-07T10:00:00Z',
+      });
+      expect(withDate.createdAt, isNotNull);
+
+      const withoutDate = ManagerAccountEntry(
+        id: 'm2',
+        txType: 'PagoRecibido',
+        txDate: '2026-09-07',
+        detail: 'Abono',
+        amount: 10,
+      );
+      expect(withoutDate.createdAt, isNull);
+      expect(withoutDate.toMap().containsKey('created_at'), isFalse);
+    });
+
     test('ManagerAccountEntry distingue auto de manual', () {
       final auto = ManagerAccountEntry.fromMap({
         'id': 'm1',

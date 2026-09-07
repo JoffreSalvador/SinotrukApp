@@ -32,7 +32,16 @@ class _TripsTab extends ConsumerWidget {
       builder: (context, trips, passengers, packages, expenses, drivers) {
         final driverNames = {for (final d in drivers) d.id: d.name};
         final rows = ReportsCalculator.byTrip(trips: trips, driverNames: driverNames, passengers: passengers, packages: packages, expenses: expenses);
-        rows.sort((a, b) => b.trip.tripDate.compareTo(a.trip.tripDate));
+        rows.sort((a, b) {
+          final byDate = b.trip.tripDate.compareTo(a.trip.tripDate);
+          if (byDate != 0) return byDate;
+          final ac = a.trip.createdAt;
+          final bc = b.trip.createdAt;
+          if (ac == null && bc == null) return 0;
+          if (ac == null) return 1;
+          if (bc == null) return -1;
+          return bc.compareTo(ac);
+        });
         if (rows.isEmpty) return const Center(child: Text('Sin viajes en el periodo'));
         return ListView.builder(
           padding: const EdgeInsets.all(8),

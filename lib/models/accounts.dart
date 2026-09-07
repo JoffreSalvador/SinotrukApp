@@ -46,6 +46,7 @@ class ManagerAccountEntry {
   final double amount;
   final String source;
   final String? relatedTripId;
+  final DateTime? createdAt;
 
   const ManagerAccountEntry({
     required this.id,
@@ -55,12 +56,19 @@ class ManagerAccountEntry {
     required this.amount,
     this.source = 'manual',
     this.relatedTripId,
+    this.createdAt,
   });
 
   bool get isAutomatic => source == 'auto';
   bool get isPorCobrar => txType == 'ManualPorCobrar';
   bool get isPagoRecibido => txType == 'PagoRecibido';
   bool get isPagoRealizado => txType == 'PagoRealizado';
+
+  static DateTime? _parseCreatedAt(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
+  }
 
   factory ManagerAccountEntry.fromMap(Map<String, dynamic> map) =>
       ManagerAccountEntry(
@@ -71,6 +79,7 @@ class ManagerAccountEntry {
         amount: (map['amount'] as num?)?.toDouble() ?? 0.0,
         source: (map['source'] ?? 'manual') as String,
         relatedTripId: map['related_trip_id'] as String?,
+        createdAt: _parseCreatedAt(map['created_at']),
       );
 
   Map<String, dynamic> toMap() => {

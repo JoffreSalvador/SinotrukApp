@@ -176,12 +176,28 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
                     const SizedBox(height: 4),
                     Text(view.balanceText, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.center, children: [
-                      Chip(label: Text('Por cobrar: ${view.cobrar}')),
-                      Chip(label: Text('Por pagar: ${view.pagar}')),
-                      Chip(label: Text('Realizados: ${view.made}')),
-                      Chip(label: Text('Recibidos: ${view.received}')),
-                    ]),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Chip(label: Text('Por cobrar: ${view.cobrar}')),
+                              const SizedBox(height: 6),
+                              Chip(label: Text('Realizados: ${view.made}')),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Chip(label: Text('Por pagar: ${view.pagar}')),
+                              const SizedBox(height: 6),
+                              Chip(label: Text('Recibidos: ${view.received}')),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ]),
                 ),
               );
@@ -211,11 +227,23 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
             error: (e, _) => Text('Error: $e'),
             data: (entries) {
               final filtered = _filterEntries(entries);
-              // Más reciente arriba; a igualdad de fecha, orden estable por id.
+              // Más reciente arriba; a igualdad de fecha, el creado primero
+              // va abajo (sin fecha de creación conocida va al final).
               final sorted = filtered.toList()
                 ..sort((a, b) {
                   final byDate = b.txDate.compareTo(a.txDate);
-                  return byDate != 0 ? byDate : a.id.compareTo(b.id);
+                  if (byDate != 0) return byDate;
+                  final ac = a.createdAt;
+                  final bc = b.createdAt;
+                  if (ac == null && bc == null) {
+                    return a.id.compareTo(b.id);
+                  }
+                  if (ac == null) return 1;
+                  if (bc == null) return -1;
+                  final byCreated = bc.compareTo(ac);
+                  return byCreated != 0
+                      ? byCreated
+                      : a.id.compareTo(b.id);
                 });
               // Solo se limita lo mostrado (últimos 50); el cálculo del
               // cuadro superior siempre abarca todo el alcance vigente.
