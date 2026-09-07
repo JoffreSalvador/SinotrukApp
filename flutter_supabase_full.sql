@@ -306,6 +306,11 @@ declare
     v_trip_date date;
     v_income    numeric(10,2);
 begin
+    -- Candado por viaje: evita que dos ejecuciones concurrentes del trigger
+    -- (un disparo por cada fila insertada/actualizada) se entrelacen en el
+    -- borrado+reinserción y dejen filas 'auto' duplicadas.
+    perform pg_advisory_xact_lock(hashtext('manager_auto_' || p_trip_id::text));
+
     select trip_date into v_trip_date from public.trips where id = p_trip_id;
     if v_trip_date is null then
         return null;  -- el viaje fue borrado; la FK en cascade limpia las filas auto

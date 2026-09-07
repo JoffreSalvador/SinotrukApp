@@ -66,8 +66,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(Icons.local_shipping,
-                      size: 72, color: Theme.of(context).colorScheme.primary),
+                  Image.asset(
+                    'assets/images/LogoSinotruk.png',
+                    height: 96,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     'Sinotruk Transport',

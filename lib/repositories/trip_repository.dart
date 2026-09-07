@@ -51,6 +51,23 @@ class TripRepository {
     return (rows as List).map((r) => Trip.fromMap(Map<String, dynamic>.from(r))).toList();
   }
 
+  /// Elimina el viaje; pasajeros, encomiendas y gastos se borran en cascada.
+  Future<void> deleteTrip(String tripId) async {
+    await _client.from('trips').delete().eq('id', tripId);
+  }
+
+  Future<void> deletePassenger(String id) async {
+    await _client.from('trip_passengers').delete().eq('id', id);
+  }
+
+  Future<void> deletePackage(String id) async {
+    await _client.from('trip_packages').delete().eq('id', id);
+  }
+
+  Future<void> deleteExpense(String id) async {
+    await _client.from('trip_expenses').delete().eq('id', id);
+  }
+
   Future<List<TripPassenger>> passengersOf(String tripId) async {
     final rows = await _client
         .from('trip_passengers')
@@ -77,7 +94,7 @@ class TripRepository {
 
   Future<TripRangeSummary> rangeSummary(String driverId,
       {required String from, required String to}) async {
-    final trips = await tripsOfDriver(driverId);
+    final trips = await tripsOfDriver(driverId, from: from, to: to);
     final tripIds = trips.map((t) => t.id).toSet();
 
     if (tripIds.isEmpty) {

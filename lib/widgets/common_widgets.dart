@@ -18,24 +18,30 @@ class SyncBadge extends ConsumerWidget {
       tooltip: 'Sincronizar ahora',
       icon: const Icon(Icons.sync),
       onPressed: () {
-        ref.invalidate(tripsStreamProvider((from: '', to: '', driverId: null)));
+        final profile = ref.read(authStateProvider).valueOrNull;
         ref.invalidate(passengersStreamProvider);
         ref.invalidate(expensesStreamProvider);
         ref.invalidate(packagesStreamProvider);
-        ref.invalidate(vehicleExpensesStreamProvider((from: '', to: '')));
         ref.invalidate(driversStreamProvider);
         ref.invalidate(vehiclesStreamProvider);
         ref.invalidate(profilesStreamProvider);
         ref.invalidate(assignmentsStreamProvider);
         ref.invalidate(managerEntriesStreamProvider);
-        ref.invalidate(driverEntriesStreamProvider(''));
+        if (profile != null) {
+          ref.invalidate(driverEntriesStreamProvider(profile.id));
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sincronizando...')),
+        );
       },
     );
   }
 }
 
-/// Filtro de fechas reutilizable (Por aÃ±o / Desde-Hasta).
-class DateFilterBar extends ConsumerWidget {
+/// Filtro de fechas reutilizable (Por año / Desde-Hasta).
+/// En modo Desde-Hasta las fechas se editan como borrador y solo se aplican
+/// al pulsar "Filtrar". "Limpiar" descarta el borrador y vuelve al defecto.
+class DateFilterBar extends StatefulWidget {
   final bool byYear;
   final int? selectedYear;
   final DateTime? from;
@@ -43,6 +49,7 @@ class DateFilterBar extends ConsumerWidget {
   final ValueChanged<bool> onModeChanged;
   final ValueChanged<int> onYearChanged;
   final void Function(({DateTime from, DateTime to})) onRangeChanged;
+  final VoidCallback onRangeCleared;
 
   const DateFilterBar({
     super.key,
@@ -53,10 +60,36 @@ class DateFilterBar extends ConsumerWidget {
     required this.onModeChanged,
     required this.onYearChanged,
     required this.onRangeChanged,
+    required this.onRangeCleared,
   });
 
-  Future<void> _pickDate(BuildContext context, bool isFrom) async {
-    final initial = isFrom ? (from ?? DateTime.now()) : (to ?? DateTime.now());
+  @override
+  State<DateFilterBar> createState() => _DateFilterBarState();
+}
+
+class _DateFilterBarState extends State<DateFilterBar> {
+  DateTime? _draftFrom;
+  DateTime? _draftTo;
+
+  @override
+  void initState() {
+    super.initState();
+    _draftFrom = widget.from;
+    _draftTo = widget.to;
+  }
+
+  @override
+  void didUpdateWidget(DateFilterBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.from != oldWidget.from || widget.to != oldWidget.to) {
+      _draftFrom = widget.from;
+      _draftTo = widget.to;
+    }
+  }
+
+  Future<void> _pickDate(bool isFrom) async {
+    final initial =
+        isFrom ? (_draftFrom ?? DateTime.now()) : (_draftTo ?? DateTime.now());
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -64,13 +97,29 @@ class DateFilterBar extends ConsumerWidget {
       lastDate: DateTime(2100),
     );
     if (picked == null) return;
-    final newFrom = isFrom ? picked : (from ?? picked);
-    final newTo = isFrom ? (to ?? picked) : picked;
-    if (!newFrom.isAfter(newTo)) onRangeChanged((from: newFrom, to: newTo));
+    setState(() {
+      if (isFrom) {
+        _draftFrom = picked;
+      } else {
+        _draftTo = picked;
+      }
+    });
   }
 
+  bool get _canApply =>
+      _draftFrom != null &&
+      _draftTo != null &&
+      !_draftFrom!.isAfter(_draftTo!) &&
+      (_draftFrom != widget.from || _draftTo != widget.to);
+
+  bool get _canClear =>
+      _draftFrom != null ||
+      _draftTo != null ||
+      widget.from != null ||
+      widget.to != null;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final currentYear = DateTime.now().year;
     return Card(
       child: Padding(
@@ -82,58 +131,92 @@ class DateFilterBar extends ConsumerWidget {
                 ButtonSegment(value: true, label: Text('Por año')),
                 ButtonSegment(value: false, label: Text('Desde - Hasta')),
               ],
-              selected: {byYear},
-              onSelectionChanged: (s) => onModeChanged(s.first),
+              selected: {widget.byYear},
+              onSelectionChanged: (s) => widget.onModeChanged(s.first),
             ),
-            if (byYear) ...[
+            if (widget.byYear) ...[
               const SizedBox(height: 8),
               DropdownButtonFormField<int>(
-                initialValue: selectedYear ?? currentYear,
+                initialValue: widget.selectedYear ?? currentYear,
                 decoration: labelText('Año'),
                 items: [
                   for (var y = currentYear; y >= currentYear - 10; y--)
                     DropdownMenuItem(value: y, child: Text('$y'))
                 ],
                 onChanged: (y) {
-                  if (y != null) onYearChanged(y);
+                  if (y != null) widget.onYearChanged(y);
                 },
               ),
-            ] else
+            ] else ...[
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: () => _pickDate(context, true),
+                      onTap: () => _pickDate(true),
                       child: InputDecorator(
                         decoration: labelText('Desde'),
-                        child: Text(from == null
+                        child: Text(_draftFrom == null
                             ? 'Seleccionar'
-                            : DateUtilsX.format(from!)),
+                            : DateUtilsX.format(_draftFrom!)),
                       ),
                     ),
                   ),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 8),
-                    child: Text('â†’'),
+                    child: Text('-'),
                   ),
                   Expanded(
                     child: InkWell(
-                      onTap: () => _pickDate(context, false),
+                      onTap: () => _pickDate(false),
                       child: InputDecorator(
                         decoration: labelText('Hasta'),
-                        child: Text(
-                            to == null ? 'Seleccionar' : DateUtilsX.format(to!)),
+                        child: Text(_draftTo == null
+                            ? 'Seleccionar'
+                            : DateUtilsX.format(_draftTo!)),
                       ),
                     ),
                   ),
                 ],
               ),
-],
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _canApply
+                          ? () => widget.onRangeChanged(
+                              (from: _draftFrom!, to: _draftTo!))
+                          : null,
+                      icon: const Icon(Icons.filter_alt),
+                      label: const Text('Filtrar'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _canClear
+                          ? () {
+                              setState(() {
+                                _draftFrom = null;
+                                _draftTo = null;
+                              });
+                              widget.onRangeCleared();
+                            }
+                          : null,
+                      icon: const Icon(Icons.clear),
+                      label: const Text('Limpiar'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
         ),
       ),
     );
-}
   }
+}
 
 InputDecoration labelText(String label) =>
     InputDecoration(labelText: label, border: const OutlineInputBorder());

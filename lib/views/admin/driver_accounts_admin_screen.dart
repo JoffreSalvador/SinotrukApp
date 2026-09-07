@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/utils/date_utils.dart';
-import '../../core/utils/enums.dart';
-import '../../core/utils/payment_math.dart';
 import '../../core/utils/account_adjustments.dart';
-import '../../models/models.dart';
-import '../../providers/app_providers.dart';
 import '../../providers/stream_providers.dart';
 import '../../widgets/common_widgets.dart';
 
@@ -47,7 +41,8 @@ class _AdjustmentView {
   }
 }
 
-/// Cuentas de conductores con el empleador (admin - con selector de conductor).
+/// Cuentas de conductores con el empleador (admin, solo lectura).
+/// Por defecto muestra los últimos 30 días, con filtro discreto Desde-Hasta.
 class DriverAccountsAdminScreen extends ConsumerStatefulWidget {
   const DriverAccountsAdminScreen({super.key});
 
@@ -57,32 +52,62 @@ class DriverAccountsAdminScreen extends ConsumerStatefulWidget {
 
 class _DriverAccountsAdminScreenState extends ConsumerState<DriverAccountsAdminScreen> {
   String? _selectedDriverId;
+  int _limit = 10;
+
+  void _refresh() {
+    if (_selectedDriverId == null) return;
+    ref.invalidate(driverEntriesStreamProvider(_selectedDriverId!));
+    ref.invalidate(driverAdjustmentStreamProvider(
+        (driverId: _selectedDriverId!, from: null, to: null)));
+    ref.invalidate(passengersStreamProvider);
+    ref.invalidate(packagesStreamProvider);
+    ref.invalidate(expensesStreamProvider);
+  }
 
   @override
   Widget build(BuildContext context) {
     final driversAsync = ref.watch(driversStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cuentas conductores')),
+      appBar: AppBar(
+        title: const Text('Cuentas conductores'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar',
+            onPressed: _refresh,
+          ),
+        ],
+      ),
       body: driversAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('Cargando datos...'),
+              ],
+            ),
+          ),
+        ),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (drivers) {
           if (drivers.isEmpty) {
             return const Center(child: Text('No hay conductores registrados'));
           }
 
-          if (_selectedDriverId == null) {
+          _selectedDriverId ??= drivers.first.id;
+          if (drivers.every((d) => d.id != _selectedDriverId)) {
             _selectedDriverId = drivers.first.id;
           }
 
-          final selectedDriver = drivers.firstWhere(
-            (d) => d.id == _selectedDriverId,
-            orElse: () => drivers.first,
-          );
-
-          final entriesAsync = ref.watch(driverEntriesStreamProvider(_selectedDriverId!));
-          final adjAsync = ref.watch(adjustmentProvider(_selectedDriverId!));
+          final entriesAsync =
+              ref.watch(driverEntriesStreamProvider(_selectedDriverId!));
+          final adjAsync = ref.watch(driverAdjustmentStreamProvider(
+              (driverId: _selectedDriverId!, from: null, to: null)));
 
           return ListView(
             padding: const EdgeInsets.all(12),
@@ -95,7 +120,19 @@ class _DriverAccountsAdminScreenState extends ConsumerState<DriverAccountsAdminS
               ),
               const SizedBox(height: 12),
               adjAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text('Cargando datos...'),
+                      ],
+                    ),
+                  ),
+                ),
                 error: (e, _) => Text('Error ajuste: $e'),
                 data: (adj) {
                   final view = _AdjustmentView.from(adj);
@@ -122,36 +159,64 @@ class _DriverAccountsAdminScreenState extends ConsumerState<DriverAccountsAdminS
                 },
               ),
               const SizedBox(height: 8),
-              Row(children: [
-                Expanded(child: OutlinedButton.icon(onPressed: () => _addEntry(context, ref, true), icon: const Icon(Icons.south_west, color: AppTheme.ok), label: const Text('Recibido'))),
-                const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: () => _addEntry(context, ref, false), icon: const Icon(Icons.north_east, color: AppTheme.danger), label: const Text('Realizado'))),
-              ]),
-              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Text('Mostrar:'),
+                  const SizedBox(width: 8),
+                  SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 10, label: Text('10')),
+                      ButtonSegment(value: 20, label: Text('20')),
+                      ButtonSegment(value: 30, label: Text('30')),
+                      ButtonSegment(value: 50, label: Text('50')),
+                    ],
+                    selected: {_limit},
+                    onSelectionChanged: (s) => setState(() => _limit = s.first),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
               entriesAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text('Cargando datos...'),
+                      ],
+                    ),
+                  ),
+                ),
                 error: (e, _) => Text('Error: $e'),
-                data: (entries) => Column(
-                  children: [
-                    for (final e in entries)
-                      Dismissible(
-                        key: ValueKey(e.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(color: AppTheme.danger, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 16), child: const Icon(Icons.delete, color: Colors.white)),
-                        confirmDismiss: (_) async => true,
-                        onDismissed: (_) async {
-                          await ref.read(driverAccountRepositoryProvider).deleteEntry(e.id);
-                        },
-                        child: ListTile(
+                data: (entries) {
+                  final sorted = entries.toList()
+                    ..sort((a, b) => b.txDate.compareTo(a.txDate));
+                  final visible = sorted.take(_limit).toList();
+                  return Column(
+                    children: [
+                      if (entries.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'Últimos ${visible.length} de ${entries.length}',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        ),
+                      for (final e in visible)
+                        ListTile(
                           leading: Icon(e.isPagoRecibido ? Icons.arrow_downward : Icons.arrow_upward, color: e.isPagoRecibido ? AppTheme.ok : AppTheme.danger),
                           title: Text(e.detail),
                           subtitle: Text('${e.txDate} · ${e.isPagoRecibido ? 'Recibido' : 'Realizado'}'),
                           trailing: Text(money(e.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                    if (entries.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
-                  ],
-                ),
+                      if (visible.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
+                    ],
+                  );
+                },
               ),
             ],
           );
@@ -160,59 +225,5 @@ class _DriverAccountsAdminScreenState extends ConsumerState<DriverAccountsAdminS
     );
   }
 
-  Future<void> _addEntry(BuildContext context, WidgetRef ref, bool isRecibido) async {
-    if (_selectedDriverId == null) return;
 
-    final detailCtrl = TextEditingController();
-    final amountCtrl = TextEditingController();
-    var date = DateTime.now();
-
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setSheetState) => Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(isRecibido ? 'Nuevo pago recibido' : 'Nuevo pago realizado', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                UpperCaseTextField(controller: detailCtrl, label: 'Detalle'),
-                const SizedBox(height: 8),
-                TextField(controller: amountCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Valor')),
-                const SizedBox(height: 8),
-                Row(children: [
-                  Text('Fecha: ${DateUtilsX.format(date)}'),
-                  const Spacer(),
-                  TextButton(onPressed: () async { final picked = await showDatePicker(context: ctx, initialDate: date, firstDate: DateTime(2000), lastDate: DateTime(2100)); if (picked != null) setSheetState(() => date = picked); }, child: const Text('Cambiar')),
-                ]),
-                const SizedBox(height: 8),
-                FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Guardar')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (ok != true) return;
-    final amount = double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? -1;
-    if (detailCtrl.text.trim().isEmpty || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Detalle y valor válido son obligatorios')));
-      return;
-    }
-
-    await ref.read(driverAccountRepositoryProvider).addEntry(DriverAccountEntry(
-          id: const Uuid().v4(),
-          driverId: _selectedDriverId!,
-          txType: isRecibido ? DriverTxType.pagoRecibido.dbValue : DriverTxType.pagoRealizado.dbValue,
-          txDate: DateUtilsX.format(date),
-          detail: detailCtrl.text.trim(),
-          amount: PaymentMath.round2(amount),
-        ));
-  }
 }

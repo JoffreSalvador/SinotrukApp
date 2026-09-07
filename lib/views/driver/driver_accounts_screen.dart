@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -10,7 +9,6 @@ import '../../core/utils/payment_math.dart';
 import '../../core/utils/account_adjustments.dart';
 import '../../models/models.dart';
 import '../../providers/app_providers.dart';
-import '../../providers/core_providers.dart';
 import '../../providers/stream_providers.dart';
 import '../../widgets/common_widgets.dart';
 
@@ -50,24 +48,64 @@ class _AdjustmentView {
 }
 
 /// Cuentas del chofer con el empleador (realtime).
-class DriverAccountsScreen extends ConsumerWidget {
+/// Por defecto muestra los últimos 30 días, con filtro discreto Desde-Hasta.
+class DriverAccountsScreen extends ConsumerStatefulWidget {
   const DriverAccountsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref.watch(authStateProvider).value;
+  ConsumerState<DriverAccountsScreen> createState() =>
+      _DriverAccountsScreenState();
+}
+
+class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
+  int _limit = 10;
+
+  void _refresh(String driverId) {
+    ref.invalidate(driverEntriesStreamProvider(driverId));
+    ref.invalidate(driverAdjustmentStreamProvider(
+        (driverId: driverId, from: null, to: null)));
+    ref.invalidate(passengersStreamProvider);
+    ref.invalidate(packagesStreamProvider);
+    ref.invalidate(expensesStreamProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = ref.watch(authStateProvider).valueOrNull;
     if (profile == null) return const Center(child: CircularProgressIndicator());
 
     final entriesAsync = ref.watch(driverEntriesStreamProvider(profile.id));
-    final adjAsync = ref.watch(adjustmentProvider(profile.id));
+    final adjAsync = ref.watch(driverAdjustmentStreamProvider(
+        (driverId: profile.id, from: null, to: null)));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cuentas con el empleador')),
+      appBar: AppBar(
+        title: const Text('Cuentas con el empleador'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Recargar',
+            onPressed: () => _refresh(profile.id),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
           adjAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Cargando datos...'),
+                  ],
+                ),
+              ),
+            ),
             error: (e, _) => Text('Error ajuste: $e'),
             data: (adj) {
               final view = _AdjustmentView.from(adj);
@@ -100,30 +138,90 @@ class DriverAccountsScreen extends ConsumerWidget {
             Expanded(child: OutlinedButton.icon(onPressed: () => _addEntry(context, ref, false), icon: const Icon(Icons.north_east, color: AppTheme.danger), label: const Text('Realizado'))),
           ]),
           const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Mostrar:'),
+              const SizedBox(width: 8),
+              SegmentedButton<int>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 10, label: Text('10')),
+                  ButtonSegment(value: 20, label: Text('20')),
+                  ButtonSegment(value: 30, label: Text('30')),
+                  ButtonSegment(value: 50, label: Text('50')),
+                ],
+                selected: {_limit},
+                onSelectionChanged: (s) => setState(() => _limit = s.first),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           entriesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Error: $e'),
-            data: (entries) => Column(
-              children: [
-                for (final e in entries)
-                  Dismissible(
-                    key: ValueKey(e.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(color: AppTheme.danger, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 16), child: const Icon(Icons.delete, color: Colors.white)),
-                    confirmDismiss: (_) async => true,
-                    onDismissed: (_) async {
-                      await ref.read(driverAccountRepositoryProvider).deleteEntry(e.id);
-                    },
-                    child: ListTile(
-                      leading: Icon(e.isPagoRecibido ? Icons.arrow_downward : Icons.arrow_upward, color: e.isPagoRecibido ? AppTheme.ok : AppTheme.danger),
-                      title: Text(e.detail),
-                      subtitle: Text('${e.txDate} · ${e.isPagoRecibido ? 'Recibido' : 'Realizado'}'),
-                      trailing: Text(money(e.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                if (entries.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
-              ],
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Cargando datos...'),
+                  ],
+                ),
+              ),
             ),
+            error: (e, _) => Text('Error: $e'),
+            data: (entries) {
+              final sorted = entries.toList()
+                ..sort((a, b) => b.txDate.compareTo(a.txDate));
+              final visible = sorted.take(_limit).toList();
+              return Column(
+                children: [
+                  if (entries.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'Últimos ${visible.length} de ${entries.length}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  for (final e in visible)
+                    Dismissible(
+                      key: ValueKey(e.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(color: AppTheme.danger, alignment: Alignment.centerRight, padding: const EdgeInsets.only(right: 16), child: const Icon(Icons.delete, color: Colors.white)),
+                      confirmDismiss: (_) async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Eliminar movimiento'),
+                            content: const Text('¿Seguro que deseas eliminar este registro?'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                              FilledButton(
+                                style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Eliminar'),
+                              ),
+                            ],
+                          ),
+                        );
+                        return ok == true;
+                      },
+                      onDismissed: (_) async {
+                        await ref.read(driverAccountRepositoryProvider).deleteEntry(e.id);
+                      },
+                      child: ListTile(
+                        leading: Icon(e.isPagoRecibido ? Icons.arrow_downward : Icons.arrow_upward, color: e.isPagoRecibido ? AppTheme.ok : AppTheme.danger),
+                        title: Text(e.detail),
+                        subtitle: Text('${e.txDate} · ${e.isPagoRecibido ? 'Recibido' : 'Realizado'}'),
+                        trailing: Text(money(e.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                    ),
+                  if (entries.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -131,7 +229,7 @@ class DriverAccountsScreen extends ConsumerWidget {
   }
 
   Future<void> _addEntry(BuildContext context, WidgetRef ref, bool isRecibido) async {
-    final profile = ref.read(authStateProvider).value;
+    final profile = ref.read(authStateProvider).valueOrNull;
     if (profile == null) return;
 
     final detailCtrl = TextEditingController();

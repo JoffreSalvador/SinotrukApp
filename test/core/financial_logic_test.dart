@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sinotruk_app/core/utils/account_adjustments.dart';
+import 'package:sinotruk_app/core/utils/date_utils.dart';
 import 'package:sinotruk_app/core/utils/payment_math.dart';
 
 void main() {
@@ -121,6 +122,24 @@ void main() {
         egresos: 25.5,
       );
       expect(summary.neto, -25.5);
+    });
+  });
+
+  group('DateUtilsX mes presente', () {
+    test('currentMonth va del día 1 hasta hoy', () {
+      final now = DateTime.now();
+      final range = DateUtilsX.currentMonth();
+      expect(range.from, DateTime(now.year, now.month, 1));
+      expect(range.to,
+          DateTime(now.year, now.month, now.day));
+      expect(range.from.isAfter(range.to), isFalse);
+    });
+
+    test('monthYearLabel en español', () {
+      expect(DateUtilsX.monthYearLabel(DateTime(2026, 9, 7)),
+          'Septiembre de 2026');
+      expect(DateUtilsX.monthYearLabel(DateTime(2026, 1, 1)),
+          'Enero de 2026');
     });
   });
 }

@@ -40,8 +40,28 @@ class _DriverHomeState extends ConsumerState<DriverHome> {
               const SyncBadge(),
               IconButton(
                 icon: const Icon(Icons.logout),
-                onPressed: () =>
-                    ref.read(authStateProvider.notifier).logout(),
+                tooltip: 'Cerrar sesión',
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Cerrar sesión'),
+                      content: const Text(
+                          '¿Seguro que deseas cerrar sesión?'),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancelar')),
+                        FilledButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Salir')),
+                      ],
+                    ),
+                  );
+                  if (ok == true) {
+                    ref.read(authStateProvider.notifier).logout();
+                  }
+                },
               ),
             ],
             floating: true,

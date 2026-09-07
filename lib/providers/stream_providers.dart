@@ -1,6 +1,5 @@
 import 'dart:core';
 import 'dart:async';
-import 'package:async/async.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,12 +11,6 @@ import '../models/profile.dart';
 import '../models/trip.dart';
 import '../models/vehicle.dart';
 import 'core_providers.dart';
-
-/// Prepends an initial value to a stream so StreamZip can emit immediately.
-Stream<T> _withInitial<T>(Stream<T> stream, T initial) async* {
-  yield initial;
-  yield* stream;
-}
 
 // ================== STREAMS (Realtime) ==================
 // NOTA: .stream(primaryKey: ['id']) devuelve TODAS las filas.
@@ -41,13 +34,14 @@ final vehiclesStreamProvider = StreamProvider.autoDispose<List<Vehicle>>((ref) {
 
 final driversStreamProvider = StreamProvider.autoDispose<List<Profile>>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client
-      .from('profiles')
-      .stream(primaryKey: ['id'])
-      .map((rows) => rows
-          .map((r) => Profile.fromMap(Map<String, dynamic>.from(r)))
-          .where((p) => p.isDriver)
-          .toList());
+  return client.from('profiles').stream(primaryKey: ['id']).map((rows) {
+    final drivers = rows
+        .map((r) => Profile.fromMap(Map<String, dynamic>.from(r)))
+        .where((p) => p.isDriver)
+        .toList();
+    drivers.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    return drivers;
+  });
 });
 
 final assignmentsStreamProvider = StreamProvider.autoDispose<List<VehicleAssignment>>((ref) {
@@ -115,12 +109,15 @@ final driverEntriesStreamProvider = StreamProvider.autoDispose.family<List<Drive
           .toList());
 });
 
+/// Solo movimientos MANUALES de la tabla: las filas `auto` las genera el
+/// trigger de la BD y la app las calcula en cliente; incluirlas aquí
+/// las contaría dos veces.
 final managerEntriesStreamProvider = StreamProvider.autoDispose<List<ManagerAccountEntry>>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client
-      .from('manager_accounts')
-      .stream(primaryKey: ['id'])
-      .map((rows) => rows.map((r) => ManagerAccountEntry.fromMap(Map<String, dynamic>.from(r))).toList());
+  return client.from('manager_accounts').stream(primaryKey: ['id']).map((rows) => rows
+      .map((r) => ManagerAccountEntry.fromMap(Map<String, dynamic>.from(r)))
+      .where((e) => !e.isAutomatic)
+      .toList());
 });
 
 // 10% commission entries derived from trips + passengers + packages
@@ -242,84 +239,86 @@ List<ManagerAccountEntry> _computeEmpresaEntries({
 }
 
 final managerCommissionEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final tripsStream = _withInitial(ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream), <Trip>[]);
-  final passengersStream = _withInitial(ref.watch(passengersStreamProvider.stream), <TripPassenger>[]);
-  final packagesStream = _withInitial(ref.watch(packagesStreamProvider.stream), <TripPackage>[]);
-  final driversStream = _withInitial(ref.watch(driversStreamProvider.stream), <Profile>[]);
-  
-  return StreamZip([
-    tripsStream,
-    passengersStream,
-    packagesStream,
-    driversStream,
-  ]).map(
-    (values) => _computeCommissionEntries(
-      trips: values[0] as List<Trip>,
-      passengers: values[1] as List<TripPassenger>,
-      packages: values[2] as List<TripPackage>,
-      driverNames: {for (final d in values[3] as List<Profile>) d.id: d.name},
-      from: range.from,
-      to: range.to,
-    ),
-  );
+  final tripsAsync = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)));
+  final passengersAsync = ref.watch(passengersStreamProvider);
+  final packagesAsync = ref.watch(packagesStreamProvider);
+  final driversAsync = ref.watch(driversStreamProvider);
+
+  for (final a in [tripsAsync, passengersAsync, packagesAsync, driversAsync]) {
+    if (a.hasError) return Stream.error(a.error!, a.stackTrace);
+  }
+  if (tripsAsync.isLoading || passengersAsync.isLoading || packagesAsync.isLoading || driversAsync.isLoading) {
+    return const Stream<List<ManagerAccountEntry>>.empty();
+  }
+
+  return Stream.value(_computeCommissionEntries(
+    trips: tripsAsync.value ?? [],
+    passengers: passengersAsync.value ?? [],
+    packages: packagesAsync.value ?? [],
+    driverNames: {for (final d in driversAsync.value ?? <Profile>[]) d.id: d.name},
+    from: range.from,
+    to: range.to,
+  ));
 });
 
 // Empresa entries provider
 final managerEmpresaEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final tripsStream = _withInitial(ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)).stream), <Trip>[]);
-  final passengersStream = _withInitial(ref.watch(passengersStreamProvider.stream), <TripPassenger>[]);
-  final packagesStream = _withInitial(ref.watch(packagesStreamProvider.stream), <TripPackage>[]);
-  final vehiclesStream = _withInitial(ref.watch(vehiclesStreamProvider.stream), <Vehicle>[]);
-  final assignmentsStream = _withInitial(ref.watch(assignmentsStreamProvider.stream), <VehicleAssignment>[]);
-  
-  return StreamZip([
-    tripsStream,
-    passengersStream,
-    packagesStream,
-    vehiclesStream,
-    assignmentsStream,
-  ]).map(
-    (values) {
-      final trips = values[0] as List<Trip>;
-      final passengers = values[1] as List<TripPassenger>;
-      final packages = values[2] as List<TripPackage>;
-      final vehicles = values[3] as List<Vehicle>;
-      final assignments = values[4] as List<VehicleAssignment>;
-      
-      // Build vehicle plate map for active assignments
-      final activeAssignments = assignments.where((a) => a.isActive).toList();
-      final vehicleMap = {for (final v in vehicles) v.id: v.plate};
-      final driverToPlate = <String, String>{};
-      for (final a in activeAssignments) {
-        final plate = vehicleMap[a.vehicleId];
-        if (plate != null) driverToPlate[a.driverId] = plate;
-      }
-      
-      return _computeEmpresaEntries(
-        trips: trips,
-        passengers: passengers,
-        packages: packages,
-        vehiclePlates: driverToPlate,
-        from: range.from,
-        to: range.to,
-      );
-    },
-  );
+  final tripsAsync = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)));
+  final passengersAsync = ref.watch(passengersStreamProvider);
+  final packagesAsync = ref.watch(packagesStreamProvider);
+  final vehiclesAsync = ref.watch(vehiclesStreamProvider);
+  final assignmentsAsync = ref.watch(assignmentsStreamProvider);
+
+  for (final a in [tripsAsync, passengersAsync, packagesAsync, vehiclesAsync, assignmentsAsync]) {
+    if (a.hasError) return Stream.error(a.error!, a.stackTrace);
+  }
+  if (tripsAsync.isLoading || passengersAsync.isLoading || packagesAsync.isLoading || vehiclesAsync.isLoading || assignmentsAsync.isLoading) {
+    return const Stream<List<ManagerAccountEntry>>.empty();
+  }
+
+  final trips = tripsAsync.value ?? [];
+  final passengers = passengersAsync.value ?? [];
+  final packages = packagesAsync.value ?? [];
+  final vehicles = vehiclesAsync.value ?? [];
+  final assignments = assignmentsAsync.value ?? [];
+
+  // Build vehicle plate map for active assignments
+  final activeAssignments = assignments.where((a) => a.isActive).toList();
+  final vehicleMap = {for (final v in vehicles) v.id: v.plate};
+  final driverToPlate = <String, String>{};
+  for (final a in activeAssignments) {
+    final plate = vehicleMap[a.vehicleId];
+    if (plate != null) driverToPlate[a.driverId] = plate;
+  }
+
+  return Stream.value(_computeEmpresaEntries(
+    trips: trips,
+    passengers: passengers,
+    packages: packages,
+    vehiclePlates: driverToPlate,
+    from: range.from,
+    to: range.to,
+  ));
 });
 
 // Combined entries (manual + auto commission + auto empresa)
 final managerCombinedEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
-  final manualEntriesStream = _withInitial(ref.watch(managerEntriesStreamProvider.stream), <ManagerAccountEntry>[]);
-  final commissionEntriesStream = _withInitial(ref.watch(managerCommissionEntriesProvider(range).stream), <ManagerAccountEntry>[]);
-  final empresaEntriesStream = _withInitial(ref.watch(managerEmpresaEntriesProvider(range).stream), <ManagerAccountEntry>[]);
-  
-  return StreamZip([
-    manualEntriesStream,
-    commissionEntriesStream,
-    empresaEntriesStream,
-  ]).map(
-    (values) => [...values[0] as List<ManagerAccountEntry>, ...values[1] as List<ManagerAccountEntry>, ...values[2] as List<ManagerAccountEntry>],
-  );
+  final manualAsync = ref.watch(managerEntriesStreamProvider);
+  final commissionAsync = ref.watch(managerCommissionEntriesProvider(range));
+  final empresaAsync = ref.watch(managerEmpresaEntriesProvider(range));
+
+  for (final a in [manualAsync, commissionAsync, empresaAsync]) {
+    if (a.hasError) return Stream.error(a.error!, a.stackTrace);
+  }
+  if (manualAsync.isLoading || commissionAsync.isLoading || empresaAsync.isLoading) {
+    return const Stream<List<ManagerAccountEntry>>.empty();
+  }
+
+  return Stream.value([
+    ...(manualAsync.value ?? []),
+    ...(commissionAsync.value ?? []),
+    ...(empresaAsync.value ?? []),
+  ]);
 });
 
 // Real-time adjustment derived from combined entries stream (auto empresa entries already included)
@@ -345,7 +344,61 @@ ManagerAccountAdjustment _computeAdjustment(List<ManagerAccountEntry> all) {
 }
 
 final managerAdjustmentStreamProvider = StreamProvider.autoDispose.family<ManagerAccountAdjustment, ({String from, String to})>((ref, range) {
-  final entriesStream = ref.watch(managerCombinedEntriesProvider(range).stream);
-  
-  return entriesStream.map(_computeAdjustment);
+  final entriesAsync = ref.watch(managerCombinedEntriesProvider(range));
+
+  if (entriesAsync.hasError) return Stream.error(entriesAsync.error!, entriesAsync.stackTrace);
+  if (entriesAsync.isLoading) return const Stream<ManagerAccountAdjustment>.empty();
+
+  return Stream.value(_computeAdjustment(entriesAsync.value ?? []));
+});
+
+// Ajuste de cuentas del conductor en tiempo real, opcionalmente acotado.
+// Sin from/to abarca todo el historial. Todo deriva de streams: cualquier
+// cambio (nuevo pago, viaje, gasto) recalcula y re-emite automáticamente.
+final driverAdjustmentStreamProvider = StreamProvider.autoDispose.family<DriverAccountAdjustment, ({String driverId, String? from, String? to})>((ref, args) {
+  final tripsAsync = ref.watch(tripsStreamProvider((
+    from: args.from ?? '2000-01-01',
+    to: args.to ?? '2100-12-31',
+    driverId: args.driverId,
+  )));
+  final passengersAsync = ref.watch(passengersStreamProvider);
+  final packagesAsync = ref.watch(packagesStreamProvider);
+  final expensesAsync = ref.watch(expensesStreamProvider);
+  final entriesAsync = ref.watch(driverEntriesStreamProvider(args.driverId));
+
+  for (final a in [tripsAsync, passengersAsync, packagesAsync, expensesAsync, entriesAsync]) {
+    if (a.hasError) return Stream.error(a.error!, a.stackTrace);
+  }
+  if (tripsAsync.isLoading ||
+      passengersAsync.isLoading ||
+      packagesAsync.isLoading ||
+      expensesAsync.isLoading ||
+      entriesAsync.isLoading) {
+    return const Stream<DriverAccountAdjustment>.empty();
+  }
+
+  final tripIds = (tripsAsync.value ?? []).map((t) => t.id).toSet();
+  final totalTripExpenses = PaymentMath.sum((expensesAsync.value ?? [])
+      .where((e) => tripIds.contains(e.tripId))
+      .map((e) => e.amount));
+  final cashPassengers = PaymentMath.sum((passengersAsync.value ?? [])
+      .where((p) => tripIds.contains(p.tripId) && p.paymentMethod == 'Efectivo')
+      .map((p) => p.cost));
+  final cashPackages = PaymentMath.sum((packagesAsync.value ?? [])
+      .where((p) => tripIds.contains(p.tripId) && p.paymentMethod == 'Efectivo')
+      .map((p) => p.cost));
+  final inRangeEntries = (entriesAsync.value ?? [])
+      .where((e) =>
+          (args.from == null || e.txDate.compareTo(args.from!) >= 0) &&
+          (args.to == null || e.txDate.compareTo(args.to!) <= 0))
+      .toList();
+
+  return Stream.value(DriverAccountAdjustment(
+    totalTripExpenses: totalTripExpenses,
+    pagosRecibidos: PaymentMath.sum(
+        inRangeEntries.where((e) => e.isPagoRecibido).map((e) => e.amount)),
+    viajesEfectivo: PaymentMath.round2(cashPassengers + cashPackages),
+    pagosRealizados: PaymentMath.sum(
+        inRangeEntries.where((e) => e.isPagoRealizado).map((e) => e.amount)),
+  ));
 });

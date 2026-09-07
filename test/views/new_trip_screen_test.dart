@@ -114,5 +114,23 @@ void main() {
       expect(find.text('Detalle *'), findsOneWidget);
       expect(find.text('Observaciones'), findsNWidgets(2));
     });
+
+    testWidgets('el total se actualiza al escribir costos', (tester) async {
+      await pumpScreen(tester);
+      expect(find.text('\$0.00'), findsOneWidget);
+
+      await tester.tap(find.text('1'));
+      await tester.pumpAndSettle();
+
+      final costField = find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Costo del viaje',
+      );
+      expect(costField, findsOneWidget);
+
+      await tester.enterText(costField, '25');
+      await tester.pump();
+
+      expect(find.text('\$25.00'), findsOneWidget);
+    });
   });
 }

@@ -14,8 +14,20 @@ import '../../widgets/common_widgets.dart';
 ///  - Encomiendas 0-n (botón agregar/quitar)
 ///  - Gastos del viaje para reembolso (Gasolina, Conductor, Peajes, Otros)
 ///  - Observaciones
+/// Si se pasa [editingTrip], funciona en modo edición con datos precargados.
 class NewTripScreen extends ConsumerStatefulWidget {
-  const NewTripScreen({super.key});
+  final Trip? editingTrip;
+  final List<TripPassenger>? editingPassengers;
+  final List<TripPackage>? editingPackages;
+  final List<TripExpense>? editingExpenses;
+
+  const NewTripScreen({
+    super.key,
+    this.editingTrip,
+    this.editingPassengers,
+    this.editingPackages,
+    this.editingExpenses,
+  });
 
   @override
   ConsumerState<NewTripScreen> createState() => _NewTripScreenState();
@@ -26,8 +38,16 @@ abstract class _DetailForm {
   final arrival = TextEditingController();
   final cost = TextEditingController();
   PaymentType payment = PaymentType.efectivo;
+  VoidCallback? _totalListener;
+
+  /// Notifica cada cambio en el costo para refrescar el total en vivo.
+  void attachTotalListener(VoidCallback listener) {
+    _totalListener = listener;
+    cost.addListener(listener);
+  }
 
   void dispose() {
+    if (_totalListener != null) cost.removeListener(_totalListener!);
     departure.dispose();
     arrival.dispose();
     cost.dispose();
@@ -55,6 +75,51 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
   final Map<ExpenseCategory, _ExpenseForm> _expenses = {};
   final _observationsCtrl = TextEditingController();
   bool _saving = false;
+
+  bool get _isEditing => widget.editingTrip != null;
+  final List<String> _originalPassengerIds = [];
+  final List<String> _originalPackageIds = [];
+  final Map<ExpenseCategory, String> _originalExpenseIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final trip = widget.editingTrip;
+    if (trip == null) return;
+    _tripDate = DateTime.tryParse(trip.tripDate) ?? DateTime.now();
+    _observationsCtrl.text = trip.observations ?? '';
+    final passengers = widget.editingPassengers ?? const <TripPassenger>[];
+    _passengerCount = passengers.length.clamp(0, 4);
+    for (var i = 0; i < _passengerCount; i++) {
+      final p = passengers[i];
+      final form = _PassengerForm()
+        ..departure.text = p.departure
+        ..arrival.text = p.arrival
+        ..cost.text = p.cost.toString()
+        ..payment = PaymentTypeX.fromDb(p.paymentMethod);
+      form.attachTotalListener(_refreshTotal);
+      _passengerForms[i] = form;
+      _originalPassengerIds.add(p.id);
+    }
+    for (final p in widget.editingPackages ?? const <TripPackage>[]) {
+      final form = _PackageForm()
+        ..departure.text = p.departure
+        ..arrival.text = p.arrival
+        ..cost.text = p.cost.toString()
+        ..payment = PaymentTypeX.fromDb(p.paymentMethod);
+      form.attachTotalListener(_refreshTotal);
+      _packages.add(form);
+      _originalPackageIds.add(p.id);
+    }
+    for (final e in widget.editingExpenses ?? const <TripExpense>[]) {
+      final category = ExpenseCategoryX.fromDb(e.category);
+      final form = _ExpenseForm()
+        ..amount.text = e.amount.toString()
+        ..detail.text = e.detail ?? '';
+      _expenses[category] = form;
+      _originalExpenseIds[category] = e.id;
+    }
+  }
 
   void _resetForm() {
     setState(() {
@@ -116,32 +181,46 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
   Future<void> _save() async {
     final profile = ref.read(authStateProvider).valueOrNull;
     if (profile == null) return;
+    if (_isEditing && !(widget.editingTrip?.isEditable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Solo se puede editar dentro de las 24 horas de creado')),
+      );
+      return;
+    }
 
-    final tripId = const Uuid().v4();
+    final tripId = _isEditing ? widget.editingTrip!.id : const Uuid().v4();
 
     final passengersData = <TripPassenger>[];
+    var passengerIndex = 0;
     for (final entry in _passengerForms.entries) {
+      if (entry.key >= _passengerCount) continue;
       final f = entry.value;
       if (!_validateDetail(f.departure, f.arrival, f.cost)) {
         return;
       }
       passengersData.add(TripPassenger(
-        id: const Uuid().v4(),
+        id: _isEditing && passengerIndex < _originalPassengerIds.length
+            ? _originalPassengerIds[passengerIndex]
+            : const Uuid().v4(),
         tripId: tripId,
         departure: f.departure.text.trim(),
         arrival: f.arrival.text.trim(),
         cost: double.parse(f.cost.text.replaceAll(',', '')),
         paymentMethod: f.payment.dbValue,
       ));
+      passengerIndex++;
     }
 
     final packagesData = <TripPackage>[];
-    for (final p in _packages) {
+    for (var i = 0; i < _packages.length; i++) {
+      final p = _packages[i];
       if (!_validateDetail(p.departure, p.arrival, p.cost)) {
         return;
       }
       packagesData.add(TripPackage(
-        id: const Uuid().v4(),
+        id: _isEditing && i < _originalPackageIds.length
+            ? _originalPackageIds[i]
+            : const Uuid().v4(),
         tripId: tripId,
         departure: p.departure.text.trim(),
         arrival: p.arrival.text.trim(),
@@ -156,7 +235,7 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
           double.tryParse(form.amount.text.replaceAll(',', '')) ?? 0;
       if (amount > 0) {
         expensesData.add(TripExpense(
-          id: const Uuid().v4(),
+          id: _isEditing ? (_originalExpenseIds[category] ?? const Uuid().v4()) : const Uuid().v4(),
           tripId: tripId,
           category: category.dbValue,
           detail: category == ExpenseCategory.otros
@@ -181,15 +260,32 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(tripRepositoryProvider).saveTripFull(
-            trip: trip,
-            passengers: passengersData,
-            packages: packagesData,
-            expenses: expensesData,
-          );
+      final repo = ref.read(tripRepositoryProvider);
+      await repo.saveTripFull(
+        trip: trip,
+        passengers: passengersData,
+        packages: packagesData,
+        expenses: expensesData,
+      );
+      if (_isEditing) {
+        final passengerIds = passengersData.map((p) => p.id).toSet();
+        for (final id in _originalPassengerIds) {
+          if (!passengerIds.contains(id)) await repo.deletePassenger(id);
+        }
+        final packageIds = packagesData.map((p) => p.id).toSet();
+        for (final id in _originalPackageIds) {
+          if (!packageIds.contains(id)) await repo.deletePackage(id);
+        }
+        final expenseCategories = expensesData.map((e) => e.category).toSet();
+        for (final entry in _originalExpenseIds.entries) {
+          if (!expenseCategories.contains(entry.key.dbValue)) {
+            await repo.deleteExpense(entry.value);
+          }
+        }
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Viaje guardado')),
+          SnackBar(content: Text(_isEditing ? 'Viaje actualizado' : 'Viaje guardado')),
         );
         if (Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
@@ -225,7 +321,7 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Nuevo viaje')),
+      appBar: AppBar(title: Text(_isEditing ? 'Editar viaje' : 'Nuevo viaje')),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -252,7 +348,11 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
           _sectionTitle('Encomiendas'),
           ..._buildPackageForms(),
           OutlinedButton.icon(
-            onPressed: () => setState(() => _packages.add(_PackageForm())),
+            onPressed: () => setState(() {
+              final form = _PackageForm();
+              form.attachTotalListener(_refreshTotal);
+              _packages.add(form);
+            }),
             icon: const Icon(Icons.add),
             label: const Text('Agregar encomienda'),
           ),
@@ -284,7 +384,7 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
             child: _saving
                 ? const SizedBox(height: 18, width: 18,
                     child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Guardar viaje'),
+                : Text(_isEditing ? 'Guardar cambios' : 'Guardar viaje'),
           ),
           const SizedBox(height: 24),
         ],
@@ -305,10 +405,19 @@ class _NewTripScreenState extends ConsumerState<NewTripScreen> {
 
   final Map<int, _PassengerForm> _passengerForms = {};
 
+  void _refreshTotal() {
+    if (mounted) setState(() {});
+  }
+
   List<Widget> _buildPassengerForms() {
     final widgets = <Widget>[];
     for (var i = 0; i < _passengerCount; i++) {
-      final form = _passengerForms.putIfAbsent(i, _PassengerForm.new);
+      var form = _passengerForms[i];
+      if (form == null) {
+        form = _PassengerForm();
+        form.attachTotalListener(_refreshTotal);
+        _passengerForms[i] = form;
+      }
       widgets.add(_personFormCard(
         key: ValueKey('passenger_$i'),
         index: i + 1,

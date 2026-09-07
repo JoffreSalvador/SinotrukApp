@@ -60,5 +60,31 @@ void main() {
           .toMap();
       expect(trip.containsKey('observations'), isFalse);
     });
+
+    test('Trip lee created_at y ventana editable de 24h', () {
+      final recent = Trip.fromMap({
+        'id': 't1',
+        'driver_id': 'd1',
+        'trip_date': '2026-08-25',
+        'created_at': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
+      });
+      expect(recent.createdAt, isNotNull);
+      expect(recent.isEditable, isTrue);
+
+      final old = Trip.fromMap({
+        'id': 't2',
+        'driver_id': 'd1',
+        'trip_date': '2026-08-20',
+        'created_at': DateTime.now().subtract(const Duration(hours: 25)).toIso8601String(),
+      });
+      expect(old.isEditable, isFalse);
+
+      const unknown = Trip(id: 't3', driverId: 'd1', tripDate: '2026-08-25');
+      expect(unknown.createdAt, isNull);
+      expect(unknown.isEditable, isFalse);
+
+      // created_at lo gestiona la BD: no se envía en toMap.
+      expect(recent.toMap().containsKey('created_at'), isFalse);
+    });
   });
 }

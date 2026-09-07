@@ -341,18 +341,22 @@ class _AccountDetailTab extends ConsumerWidget {
             const SizedBox(height: 16),
             // Resumen 10%
             Card(
-              color: Theme.of(context).colorScheme.primaryContainer,
+              color: AppTheme.header,
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
                     Text('Comisión 10% (Pasajeros + Encomiendas)',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            )),
                     const SizedBox(height: 8),
                     Text(money(report.commission10),
                         style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
+                              color: Colors.white,
                             )),
                   ],
                 ),
@@ -596,6 +600,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             onModeChanged: (byYear) { setState(() => _byYear = byYear); },
             onYearChanged: (y) { setState(() => _year = y); },
             onRangeChanged: (r) { setState(() { _from = r.from; _to = r.to; }); },
+            onRangeCleared: () { setState(() { _byYear = true; _year = DateTime.now().year; _from = null; _to = null; }); },
           ),
           Expanded(
             child: TabBarView(children: [

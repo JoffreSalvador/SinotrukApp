@@ -48,6 +48,7 @@ class _VehicleExpensesScreenState extends ConsumerState<VehicleExpensesScreen> {
             onModeChanged: (byYear) => setState(() => _byYear = byYear),
             onYearChanged: (y) => setState(() => _year = y),
             onRangeChanged: (r) => setState(() { _from = r.from; _to = r.to; }),
+            onRangeCleared: () => setState(() { _byYear = true; _year = DateTime.now().year; _from = null; _to = null; }),
           ),
           const SizedBox(height: 12),
           vehiclesAsync.when(

@@ -24,6 +24,8 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
   String _filter = 'Todos';
   DateTime? _from;
   DateTime? _to;
+  DateTime? _draftFrom;
+  DateTime? _draftTo;
 
   @override
   Widget build(BuildContext context) {
@@ -36,13 +38,37 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Cuenta con el gerente'), actions: [
-        IconButton(icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(managerAdjustmentStreamProvider(range))),
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Recargar',
+          onPressed: () {
+            ref.invalidate(managerEntriesStreamProvider);
+            ref.invalidate(tripsStreamProvider((from: range.from, to: range.to, driverId: null)));
+            ref.invalidate(passengersStreamProvider);
+            ref.invalidate(packagesStreamProvider);
+            ref.invalidate(driversStreamProvider);
+            ref.invalidate(vehiclesStreamProvider);
+            ref.invalidate(assignmentsStreamProvider);
+          },
+        ),
       ]),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
           adjAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Cargando datos...'),
+                  ],
+                ),
+              ),
+            ),
             error: (e, _) => Text('Error ajuste: $e'),
             data: (adj) {
               final view = _AdjustmentView.from(adj);
@@ -94,12 +120,12 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
               Expanded(
                 child: InkWell(
                   onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: _from ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setState(() => _from = picked);
+                    final picked = await showDatePicker(context: context, initialDate: _draftFrom ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) setState(() => _draftFrom = picked);
                   },
                   child: InputDecorator(
                     decoration: const InputDecoration(labelText: 'Desde', prefixIcon: Icon(Icons.date_range)),
-                    child: Text(_from != null ? DateUtilsX.format(_from!) : 'Seleccionar'),
+                    child: Text(_draftFrom != null ? DateUtilsX.format(_draftFrom!) : 'Seleccionar'),
                   ),
                 ),
               ),
@@ -107,27 +133,56 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
               Expanded(
                 child: InkWell(
                   onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: _to ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setState(() => _to = picked);
+                    final picked = await showDatePicker(context: context, initialDate: _draftTo ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    if (picked != null) setState(() => _draftTo = picked);
                   },
                   child: InputDecorator(
                     decoration: const InputDecoration(labelText: 'Hasta', prefixIcon: Icon(Icons.date_range)),
-                    child: Text(_to != null ? DateUtilsX.format(_to!) : 'Seleccionar'),
+                    child: Text(_draftTo != null ? DateUtilsX.format(_draftTo!) : 'Seleccionar'),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              if (_from != null || _to != null)
-                IconButton(
-                  icon: const Icon(Icons.clear, color: AppTheme.danger),
-                  onPressed: () => setState(() { _from = null; _to = null; }),
-                  tooltip: 'Limpiar fechas',
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _canApplyDateFilter
+                      ? () => setState(() { _from = _draftFrom; _to = _draftTo; })
+                      : null,
+                  icon: const Icon(Icons.filter_alt),
+                  label: const Text('Filtrar'),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _canClearDateFilter
+                      ? () => setState(() { _from = null; _to = null; _draftFrom = null; _draftTo = null; })
+                      : null,
+                  icon: const Icon(Icons.clear),
+                  label: const Text('Limpiar'),
+                ),
+              ),
             ],
           ),
           const Divider(height: 24),
           entriesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Cargando datos...'),
+                  ],
+                ),
+              ),
+            ),
             error: (e, _) => Text('Error: $e'),
             data: (entries) {
               final filtered = _filterEntries(entries);
@@ -167,6 +222,18 @@ for (final e in filtered)
       ),
     );
   }
+
+  bool get _canApplyDateFilter =>
+      _draftFrom != null &&
+      _draftTo != null &&
+      !_draftFrom!.isAfter(_draftTo!) &&
+      (_draftFrom != _from || _draftTo != _to);
+
+  bool get _canClearDateFilter =>
+      _draftFrom != null ||
+      _draftTo != null ||
+      _from != null ||
+      _to != null;
 
   List<ManagerAccountEntry> _filterEntries(List<ManagerAccountEntry> entries) {
     switch (_filter) {

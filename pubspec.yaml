@@ -34,3 +34,4 @@ flutter:
   assets:
     - .env
     - .env.example
+    - assets/images/LogoSinotruk.png

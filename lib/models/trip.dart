@@ -3,19 +3,34 @@ class Trip {
   final String driverId;
   final String tripDate;
   final String? observations;
+  final DateTime? createdAt;
 
   const Trip({
     required this.id,
     required this.driverId,
     required this.tripDate,
     this.observations,
+    this.createdAt,
   });
+
+  /// Ventana de 24h desde la creación para editar/eliminar el viaje.
+  /// Sin fecha de creación conocida no se permite modificar.
+  bool get isEditable =>
+      createdAt != null &&
+      DateTime.now().difference(createdAt!) < const Duration(hours: 24);
+
+  static DateTime? _parseCreatedAt(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
+  }
 
   factory Trip.fromMap(Map<String, dynamic> map) => Trip(
         id: map['id'] as String,
         driverId: map['driver_id'] as String,
         tripDate: (map['trip_date'] ?? '') as String,
         observations: map['observations'] as String?,
+        createdAt: _parseCreatedAt(map['created_at']),
       );
 
   Map<String, dynamic> toMap() => {
