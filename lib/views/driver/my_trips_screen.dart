@@ -180,7 +180,7 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
       ),
       body: Column(
         children: [
-          if (_showFilter) _filterCard(),
+          AnimatedFilterPanel(expanded: _showFilter, child: _filterCard()),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())

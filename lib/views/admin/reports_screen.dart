@@ -32,6 +32,8 @@ class _TripsTab extends ConsumerWidget {
       builder: (context, trips, passengers, packages, expenses, drivers) {
         final driverNames = {for (final d in drivers) d.id: d.name};
         final rows = ReportsCalculator.byTrip(trips: trips, driverNames: driverNames, passengers: passengers, packages: packages, expenses: expenses);
+        rows.sort((a, b) => b.trip.tripDate.compareTo(a.trip.tripDate));
+        if (rows.isEmpty) return const Center(child: Text('Sin viajes en el periodo'));
         return ListView.builder(
           padding: const EdgeInsets.all(8),
           itemCount: rows.length,
@@ -196,6 +198,7 @@ class _DriverTabInner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final driverNames = {for (final d in drivers) d.id: d.name};
     final report = ReportsCalculator.byDriver(driverId: driverId, driverNames: driverNames, trips: trips, passengers: passengers, packages: packages, expenses: expenses);
+    report.rows.sort((a, b) => b.date.compareTo(a.date));
     final totalValue = PaymentMath.sum(report.rows.map((r) => r.tripValue));
     return ListView(padding: const EdgeInsets.all(8), children: [
       DropdownButtonFormField<String>(initialValue: driverId, items: driverNames.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(), onChanged: onDriverChanged, decoration: const InputDecoration(labelText: 'Conductor')),
@@ -232,35 +235,6 @@ class _Async3<A, B, C> extends ConsumerWidget {
   }
 }
 
-class _Async4<A, B, C, D> extends ConsumerWidget {
-  final AsyncValue<List<A>> a;
-  final AsyncValue<List<B>> b;
-  final AsyncValue<List<C>> c;
-  final AsyncValue<List<D>> d;
-  final Widget Function(BuildContext, List<A>, List<B>, List<C>, List<D>) builder;
-  const _Async4({required this.a, required this.b, required this.c, required this.d, required this.builder});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return a.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('Error: $e')),
-      data: (aVal) => b.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (bVal) => c.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-          data: (cVal) => d.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Error: $e')),
-            data: (dVal) => builder(context, aVal, bVal, cVal, dVal),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Pestaña Por Rutas
 class _RoutesTab extends ConsumerWidget {
@@ -378,6 +352,10 @@ class _AccountDetailTab extends ConsumerWidget {
     Color color,
   ) {
     final total = passengerTotal + packageTotal;
+    final sortedPassengers = passengers.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final sortedPackages = packages.toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -392,10 +370,10 @@ class _AccountDetailTab extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 8),
-        if (passengers.isNotEmpty) ...[
-          Text('Pasajeros (${passengers.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue)),
+        if (sortedPassengers.isNotEmpty) ...[
+          Text('Pasajeros (${sortedPassengers.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.blue)),
           const SizedBox(height: 4),
-          ...passengers.map((p) => ListTile(
+          ...sortedPassengers.map((p) => ListTile(
             dense: true,
             leading: const Icon(Icons.person, size: 20, color: Colors.blue),
             title: Text(p.detail),
@@ -404,10 +382,10 @@ class _AccountDetailTab extends ConsumerWidget {
           )),
           const SizedBox(height: 8),
         ],
-        if (packages.isNotEmpty) ...[
-          Text('Encomiendas (${packages.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.orange)),
+        if (sortedPackages.isNotEmpty) ...[
+          Text('Encomiendas (${sortedPackages.length})', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.orange)),
           const SizedBox(height: 4),
-          ...packages.map((p) => ListTile(
+          ...sortedPackages.map((p) => ListTile(
             dense: true,
             leading: const Icon(Icons.inventory_2, size: 20, color: Colors.orange),
             title: Text(p.detail),
@@ -425,36 +403,6 @@ class _AccountDetailTab extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
       ],
-    );
-  }
-}
-
-/// Pestaña Empresa
-class _CompanyTab extends ConsumerWidget {
-  final ({String from, String to}) range;
-  const _CompanyTab({required this.range});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final tripsAsync = ref.watch(tripsStreamProvider((from: range.from, to: range.to, driverId: null)));
-    final passengersAsync = ref.watch(passengersStreamProvider);
-    final packagesAsync = ref.watch(packagesStreamProvider);
-    final driversAsync = ref.watch(driversStreamProvider);
-
-    return _Async4<Trip, TripPassenger, TripPackage, Profile>(
-      a: tripsAsync,
-      b: passengersAsync,
-      c: packagesAsync,
-      d: driversAsync,
-      builder: (context, trips, passengers, packages, drivers) {
-        final driverNames = {for (final d in drivers) d.id: d.name};
-        final report = ReportsCalculator.byCompany(trips: trips, driverNames: driverNames, passengers: passengers, packages: packages);
-        return ListView(padding: const EdgeInsets.all(8), children: [
-          ...report.rows.map((r) => ListTile(title: Text(r.route), subtitle: Text('${r.date} · ${r.driverName}'), trailing: Text(money(r.value)))),
-          if (report.rows.isEmpty) const Center(child: Text('Sin viajes de empresa en el periodo')),
-          Card(color: Theme.of(context).colorScheme.primaryContainer, child: Padding(padding: const EdgeInsets.all(16), child: Text('TOTAL EMPRESA: ${money(report.total)}', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)))),
-        ]);
-      },
     );
   }
 }
@@ -480,7 +428,14 @@ class _IncomeExpenseTab extends ConsumerWidget {
       e: tripsAsync,
       builder: (context, passengers, packages, expenses, vehicleExpenses, trips) {
         final tripDates = {for (final t in trips) t.id: t.tripDate};
-        final rows = ReportsCalculator.incomeExpense(passengers: passengers, packages: packages, expenses: expenses, tripDates: tripDates, vehicleExpenses: vehicleExpenses);
+        final inRangePassengers =
+            passengers.where((p) => tripDates.containsKey(p.tripId)).toList();
+        final inRangePackages =
+            packages.where((p) => tripDates.containsKey(p.tripId)).toList();
+        final inRangeExpenses =
+            expenses.where((e) => tripDates.containsKey(e.tripId)).toList();
+        final rows = ReportsCalculator.incomeExpense(passengers: inRangePassengers, packages: inRangePackages, expenses: inRangeExpenses, tripDates: tripDates, vehicleExpenses: vehicleExpenses);
+        rows.sort((a, b) => b.date.compareTo(a.date));
         final ingresos = PaymentMath.sum(rows.where((r) => r.isIncome).map((r) => r.value));
         final egresos = PaymentMath.sum(rows.where((r) => !r.isIncome).map((r) => r.value));
         return ListView(padding: const EdgeInsets.all(8), children: [
@@ -561,54 +516,165 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
-  bool _byYear = true;
-  int _year = DateTime.now().year;
   DateTime? _from;
   DateTime? _to;
+  DateTime? _draftFrom;
+  DateTime? _draftTo;
+  bool _showFilter = false;
   String? _selectedDriverId;
 
-  ({String from, String to}) get _range {
-    final from = _byYear ? DateTime(_year) : (_from ?? DateTime(_year));
-    final to = _byYear ? DateTime(_year, 12, 31) : (_to ?? DateTime(_year, 12, 31));
-    return (from: DateUtilsX.format(from), to: DateUtilsX.format(to));
+  bool get _hasFilter => _from != null && _to != null;
+
+  bool get _canApplyFilter =>
+      _draftFrom != null &&
+      _draftTo != null &&
+      !_draftFrom!.isAfter(_draftTo!) &&
+      (_draftFrom != _from || _draftTo != _to);
+
+  bool get _canClearFilter =>
+      _draftFrom != null ||
+      _draftTo != null ||
+      _from != null ||
+      _to != null;
+
+  /// Rango vigente para una pestaña: filtro personalizado o últimos [days].
+  ({String from, String to}) _rangeFor(int days) {
+    if (_from != null && _to != null) {
+      return (from: DateUtilsX.format(_from!), to: DateUtilsX.format(_to!));
+    }
+    final d = DateUtilsX.lastDays(days);
+    return (from: DateUtilsX.format(d.from), to: DateUtilsX.format(d.to));
+  }
+
+  Future<void> _pickDraftDate(bool isFrom) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom
+          ? (_draftFrom ?? DateTime.now())
+          : (_draftTo ?? DateTime.now()),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isFrom) {
+          _draftFrom = picked;
+        } else {
+          _draftTo = picked;
+        }
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final range = _range;
+    final tripsRange = _rangeFor(15);
+    final range60 = _rangeFor(60);
 
     return DefaultTabController(
-      length: 5,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Reportes'),
-          actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() {}))],
+          actions: [
+            IconButton(
+              icon: Icon(Icons.filter_list,
+                  color: _hasFilter ? AppTheme.button : null),
+              tooltip: 'Filtrar por fechas',
+              onPressed: () => setState(() => _showFilter = !_showFilter),
+            ),
+            IconButton(icon: const Icon(Icons.refresh), onPressed: () => setState(() {})),
+          ],
           bottom: TabBar(isScrollable: true, tabs: const [
             Tab(text: 'Viajes'),
             Tab(text: 'Conductor'),
             Tab(text: 'Detalle cuentas'),
-            Tab(text: 'Empresa'),
             Tab(text: 'Ing/Egr'),
           ]),
         ),
         body: Column(children: [
-          DateFilterBar(
-            byYear: _byYear,
-            selectedYear: _year,
-            from: _from,
-            to: _to,
-            onModeChanged: (byYear) { setState(() => _byYear = byYear); },
-            onYearChanged: (y) { setState(() => _year = y); },
-            onRangeChanged: (r) { setState(() { _from = r.from; _to = r.to; }); },
-            onRangeCleared: () { setState(() { _byYear = true; _year = DateTime.now().year; _from = null; _to = null; }); },
+          AnimatedFilterPanel(
+            expanded: _showFilter,
+            child: Card(
+              margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickDraftDate(true),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Desde',
+                                  prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftFrom != null
+                                  ? DateUtilsX.format(_draftFrom!)
+                                  : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickDraftDate(false),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Hasta',
+                                  prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftTo != null
+                                  ? DateUtilsX.format(_draftTo!)
+                                  : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _canApplyFilter
+                                ? () => setState(() {
+                                      _from = _draftFrom;
+                                      _to = _draftTo;
+                                    })
+                                : null,
+                            icon: const Icon(Icons.filter_alt),
+                            label: const Text('Filtrar'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _canClearFilter
+                                ? () => setState(() {
+                                      _from = null;
+                                      _to = null;
+                                      _draftFrom = null;
+                                      _draftTo = null;
+                                    })
+                                : null,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Limpiar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           Expanded(
             child: TabBarView(children: [
-              _TripsTab(range: (from: _range.from, to: _range.to, driverId: _selectedDriverId)),
-              _DriverTab(range: _range, selectedDriverId: _selectedDriverId, onDriverChanged: (v) => setState(() => _selectedDriverId = v)),
-              _AccountDetailTab(range: _range),
-              _CompanyTab(range: _range),
-              _IncomeExpenseTab(range: _range),
+              _TripsTab(range: (from: tripsRange.from, to: tripsRange.to, driverId: _selectedDriverId)),
+              _DriverTab(range: range60, selectedDriverId: _selectedDriverId, onDriverChanged: (v) => setState(() => _selectedDriverId = v)),
+              _AccountDetailTab(range: range60),
+              _IncomeExpenseTab(range: range60),
             ]),
           ),
         ]),

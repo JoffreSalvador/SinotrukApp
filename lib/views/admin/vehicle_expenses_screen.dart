@@ -19,38 +19,151 @@ class VehicleExpensesScreen extends ConsumerStatefulWidget {
 }
 
 class _VehicleExpensesScreenState extends ConsumerState<VehicleExpensesScreen> {
-  bool _byYear = true;
-  int _year = DateTime.now().year;
   DateTime? _from;
   DateTime? _to;
+  DateTime? _draftFrom;
+  DateTime? _draftTo;
+  bool _showFilter = false;
+
+  bool get _hasFilter => _from != null && _to != null;
+
+  bool get _canApplyFilter =>
+      _draftFrom != null &&
+      _draftTo != null &&
+      !_draftFrom!.isAfter(_draftTo!) &&
+      (_draftFrom != _from || _draftTo != _to);
+
+  bool get _canClearFilter =>
+      _draftFrom != null ||
+      _draftTo != null ||
+      _from != null ||
+      _to != null;
+
+  /// Por defecto: todos los gastos del año vigente.
+  ({String from, String to}) get _range {
+    final now = DateTime.now();
+    return (
+      from: DateUtilsX.format(_from ?? DateTime(now.year)),
+      to: DateUtilsX.format(_to ?? DateTime(now.year, 12, 31)),
+    );
+  }
+
+  Future<void> _pickDraftDate(bool isFrom) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom
+          ? (_draftFrom ?? DateTime.now())
+          : (_draftTo ?? DateTime.now()),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isFrom) {
+          _draftFrom = picked;
+        } else {
+          _draftTo = picked;
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final from = _byYear ? DateTime(_year) : (_from ?? DateTime(_year));
-    final to = _byYear ? DateTime(_year, 12, 31) : (_to ?? DateTime(_year, 12, 31));
-
-    final expensesAsync = ref.watch(vehicleExpensesStreamProvider((from: DateUtilsX.format(from), to: DateUtilsX.format(to))));
+    final range = _range;
+    final expensesAsync = ref.watch(vehicleExpensesStreamProvider((from: range.from, to: range.to)));
     final vehiclesAsync = ref.watch(vehiclesStreamProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Gastos de vehículos'), actions: [
+        IconButton(
+          icon: Icon(Icons.filter_list,
+              color: _hasFilter ? AppTheme.button : null),
+          tooltip: 'Filtrar por fechas',
+          onPressed: () => setState(() => _showFilter = !_showFilter),
+        ),
         IconButton(icon: const Icon(Icons.add), onPressed: () => _showAddDialog(context, ref)),
         IconButton(icon: const Icon(Icons.refresh), onPressed: () => ref.invalidate(vehiclesStreamProvider)),
       ]),
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          DateFilterBar(
-            byYear: _byYear,
-            selectedYear: _year,
-            from: _from,
-            to: _to,
-            onModeChanged: (byYear) => setState(() => _byYear = byYear),
-            onYearChanged: (y) => setState(() => _year = y),
-            onRangeChanged: (r) => setState(() { _from = r.from; _to = r.to; }),
-            onRangeCleared: () => setState(() { _byYear = true; _year = DateTime.now().year; _from = null; _to = null; }),
+          AnimatedFilterPanel(
+            expanded: _showFilter,
+            child: Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickDraftDate(true),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Desde',
+                                  prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftFrom != null
+                                  ? DateUtilsX.format(_draftFrom!)
+                                  : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickDraftDate(false),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                  labelText: 'Hasta',
+                                  prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftTo != null
+                                  ? DateUtilsX.format(_draftTo!)
+                                  : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _canApplyFilter
+                                ? () => setState(() {
+                                      _from = _draftFrom;
+                                      _to = _draftTo;
+                                    })
+                                : null,
+                            icon: const Icon(Icons.filter_alt),
+                            label: const Text('Filtrar'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _canClearFilter
+                                ? () => setState(() {
+                                      _from = null;
+                                      _to = null;
+                                      _draftFrom = null;
+                                      _draftTo = null;
+                                    })
+                                : null,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Limpiar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
           vehiclesAsync.when(
             loading: () => const SizedBox(),
             error: (_, __) => const SizedBox(),

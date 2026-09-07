@@ -301,7 +301,9 @@ final managerEmpresaEntriesProvider = StreamProvider.autoDispose.family<List<Man
   ));
 });
 
-// Combined entries (manual + auto commission + auto empresa)
+// Combined entries (manual + auto commission + auto empresa).
+// Todo respeta el rango: los manuales se acotan por tx_date y los
+// automáticos ya vienen calculados dentro del rango.
 final managerCombinedEntriesProvider = StreamProvider.autoDispose.family<List<ManagerAccountEntry>, ({String from, String to})>((ref, range) {
   final manualAsync = ref.watch(managerEntriesStreamProvider);
   final commissionAsync = ref.watch(managerCommissionEntriesProvider(range));
@@ -314,8 +316,14 @@ final managerCombinedEntriesProvider = StreamProvider.autoDispose.family<List<Ma
     return const Stream<List<ManagerAccountEntry>>.empty();
   }
 
+  final manualInRange = (manualAsync.value ?? [])
+      .where((e) =>
+          e.txDate.compareTo(range.from) >= 0 &&
+          e.txDate.compareTo(range.to) <= 0)
+      .toList();
+
   return Stream.value([
-    ...(manualAsync.value ?? []),
+    ...manualInRange,
     ...(commissionAsync.value ?? []),
     ...(empresaAsync.value ?? []),
   ]);

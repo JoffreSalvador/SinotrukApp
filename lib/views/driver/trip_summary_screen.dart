@@ -141,7 +141,7 @@ class _TripSummaryScreenState extends ConsumerState<TripSummaryScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
-          if (_showFilter) _filterCard(),
+          AnimatedFilterPanel(expanded: _showFilter, child: _filterCard()),
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32),

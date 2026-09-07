@@ -6,7 +6,6 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/account_adjustments.dart';
 import '../../core/utils/date_utils.dart';
 import '../../core/utils/enums.dart';
-import '../../core/utils/payment_math.dart';
 import '../../models/models.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/stream_providers.dart';
@@ -26,6 +25,9 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
   DateTime? _to;
   DateTime? _draftFrom;
   DateTime? _draftTo;
+  bool _showFilter = false;
+
+  bool get _hasFilter => _from != null && _to != null;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,12 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Cuenta con el gerente'), actions: [
+        IconButton(
+          icon: Icon(Icons.filter_list,
+              color: _hasFilter ? AppTheme.button : null),
+          tooltip: 'Filtrar por fechas',
+          onPressed: () => setState(() => _showFilter = !_showFilter),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recargar',
@@ -55,6 +63,91 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          AnimatedFilterPanel(
+            expanded: _showFilter,
+            child: Column(
+              children: [
+                Card(
+                  margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<String>(
+                      isDense: true,
+                      value: _filter,
+                      decoration: const InputDecoration(labelText: 'Filtrar pagos'),
+                      items: const [
+                        DropdownMenuItem(value: 'Todos', child: Text('Todos')),
+                        DropdownMenuItem(value: 'Recibidos', child: Text('Recibidos')),
+                        DropdownMenuItem(value: 'Realizados', child: Text('Realizados')),
+                        DropdownMenuItem(value: 'Por cobrar', child: Text('Por cobrar')),
+                        DropdownMenuItem(value: 'Por pagar', child: Text('Por pagar')),
+                      ],
+                      onChanged: (v) => setState(() => _filter = v ?? 'Todos'),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(context: context, initialDate: _draftFrom ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                              if (picked != null) setState(() => _draftFrom = picked);
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(labelText: 'Desde', prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftFrom != null ? DateUtilsX.format(_draftFrom!) : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () async {
+                              final picked = await showDatePicker(context: context, initialDate: _draftTo ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                              if (picked != null) setState(() => _draftTo = picked);
+                            },
+                            child: InputDecorator(
+                              decoration: const InputDecoration(labelText: 'Hasta', prefixIcon: Icon(Icons.date_range)),
+                              child: Text(_draftTo != null ? DateUtilsX.format(_draftTo!) : 'Seleccionar'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: _canApplyDateFilter
+                                ? () => setState(() { _from = _draftFrom; _to = _draftTo; })
+                                : null,
+                            icon: const Icon(Icons.filter_alt),
+                            label: const Text('Filtrar'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _canClearDateFilter
+                                ? () => setState(() { _from = null; _to = null; _draftFrom = null; _draftTo = null; })
+                                : null,
+                            icon: const Icon(Icons.clear),
+                            label: const Text('Limpiar'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+              ],
+            ),
+          ),
           adjAsync.when(
             loading: () => const Center(
               child: Padding(
@@ -94,80 +187,12 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
               );
             },
           ),
-          Wrap(spacing: 8, runSpacing: 8, children: [
+          Wrap(spacing: 8, runSpacing: 8, alignment: WrapAlignment.center, children: [
             OutlinedButton.icon(onPressed: () => _showPaymentDialog(context, ref, true), icon: const Icon(Icons.south_west, color: AppTheme.ok), label: const Text('Pago recibido')),
             OutlinedButton.icon(onPressed: () => _showPaymentDialog(context, ref, false), icon: const Icon(Icons.north_east, color: AppTheme.danger), label: const Text('Pago realizado')),
             OutlinedButton.icon(onPressed: () => _showManualDialog(context, ref, true), icon: const Icon(Icons.add_circle_outline, color: AppTheme.ok), label: const Text('+ Por cobrar')),
             OutlinedButton.icon(onPressed: () => _showManualDialog(context, ref, false), icon: const Icon(Icons.remove_circle_outline, color: AppTheme.danger), label: const Text('+ Por pagar')),
           ]),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            isDense: true,
-            value: _filter,
-            decoration: const InputDecoration(labelText: 'Filtrar pagos'),
-            items: const [
-              DropdownMenuItem(value: 'Todos', child: Text('Todos')),
-              DropdownMenuItem(value: 'Recibidos', child: Text('Recibidos')),
-              DropdownMenuItem(value: 'Realizados', child: Text('Realizados')),
-              DropdownMenuItem(value: 'Por cobrar', child: Text('Por cobrar')),
-              DropdownMenuItem(value: 'Por pagar', child: Text('Por pagar')),
-            ],
-            onChanged: (v) => setState(() => _filter = v ?? 'Todos'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: _draftFrom ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setState(() => _draftFrom = picked);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Desde', prefixIcon: Icon(Icons.date_range)),
-                    child: Text(_draftFrom != null ? DateUtilsX.format(_draftFrom!) : 'Seleccionar'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: _draftTo ?? DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
-                    if (picked != null) setState(() => _draftTo = picked);
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Hasta', prefixIcon: Icon(Icons.date_range)),
-                    child: Text(_draftTo != null ? DateUtilsX.format(_draftTo!) : 'Seleccionar'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _canApplyDateFilter
-                      ? () => setState(() { _from = _draftFrom; _to = _draftTo; })
-                      : null,
-                  icon: const Icon(Icons.filter_alt),
-                  label: const Text('Filtrar'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _canClearDateFilter
-                      ? () => setState(() { _from = null; _to = null; _draftFrom = null; _draftTo = null; })
-                      : null,
-                  icon: const Icon(Icons.clear),
-                  label: const Text('Limpiar'),
-                ),
-              ),
-            ],
-          ),
           const Divider(height: 24),
           entriesAsync.when(
             loading: () => const Center(
@@ -186,14 +211,27 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
             error: (e, _) => Text('Error: $e'),
             data: (entries) {
               final filtered = _filterEntries(entries);
-              final total = PaymentMath.sum(filtered.map((e) => e.amount));
+              // Más reciente arriba; a igualdad de fecha, orden estable por id.
+              final sorted = filtered.toList()
+                ..sort((a, b) {
+                  final byDate = b.txDate.compareTo(a.txDate);
+                  return byDate != 0 ? byDate : a.id.compareTo(b.id);
+                });
+              // Solo se limita lo mostrado (últimos 50); el cálculo del
+              // cuadro superior siempre abarca todo el alcance vigente.
+              const displayLimit = 50;
+              final visible = sorted.take(displayLimit).toList();
               return Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text('Total filtrado: ${money(total)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-for (final e in filtered)
+                  if (sorted.length > visible.length)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'Últimos ${visible.length} de ${sorted.length}',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+for (final e in visible)
                       e.isAutomatic
                           ? ListTile(
                               leading: Icon(_iconFor(e), color: _colorFor(e)),
@@ -213,7 +251,7 @@ for (final e in filtered)
                                 trailing: Text(money(e.amount), style: TextStyle(fontWeight: FontWeight.w600, color: _amountColor(e))),
                               ),
                             ),
-                  if (filtered.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
+                  if (visible.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Center(child: Text('Sin movimientos'))),
                 ],
               );
             },

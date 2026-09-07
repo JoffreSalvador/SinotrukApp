@@ -28,10 +28,13 @@ class DateUtilsX {
       iso.compareTo(from) >= 0 && iso.compareTo(to) <= 0;
 
   /// Rango por defecto de los últimos 30 días (hoy incluido).
-  static ({DateTime from, DateTime to}) last30Days() {
+  static ({DateTime from, DateTime to}) last30Days() => lastDays(30);
+
+  /// Rango de los últimos [days] días (hoy incluido).
+  static ({DateTime from, DateTime to}) lastDays(int days) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    return (from: today.subtract(const Duration(days: 29)), to: today);
+    return (from: today.subtract(Duration(days: days - 1)), to: today);
   }
 
   /// Rango del mes presente: del día 1 hasta hoy.
