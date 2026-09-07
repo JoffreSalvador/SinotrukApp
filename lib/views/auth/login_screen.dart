@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../providers/app_providers.dart';
 
@@ -19,11 +20,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool? _needsBootstrap;
   bool _checking = true;
   bool _obscurePassword = true;
+  String _versionLabel = '';
 
   @override
   void initState() {
     super.initState();
+    _loadVersion();
     _detectBootstrap();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _versionLabel = 'v${info.version}');
+    } catch (_) {
+      // Sin versión visible; no bloquea el login.
+    }
   }
 
   Future<void> _detectBootstrap() async {
@@ -138,6 +150,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ? 'Crear administrador'
                               : 'Ingresar'),
                     ),
+                    if (_versionLabel.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      Text(
+                        _versionLabel,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
+                                  ?.color
+                                  ?.withValues(alpha: 0.6),
+                            ),
+                      ),
+                    ],
                   ],
                 ],
               ),
