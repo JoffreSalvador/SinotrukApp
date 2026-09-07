@@ -39,8 +39,6 @@ class AuthState extends AsyncNotifier<Profile?> {
   }
 
   Future<bool> login(String username, String password) async {
-    // Capturar estado actual ANTES de cambiar a loading
-    final previousState = state;
     state = const AsyncLoading();
     try {
       final profile = await ref.read(authServiceProvider).login(
@@ -49,10 +47,12 @@ class AuthState extends AsyncNotifier<Profile?> {
           );
       state = AsyncData(profile);
       return true;
-    } catch (e) {
-      // Restaurar estado anterior (que era AsyncData(null) al inicio)
-      state = previousState;
-      rethrow;
+    } catch (e, st) {
+      // Publicar el error para que AppRoot lo muestre, y volver al estado
+      // inicial para permitir reintentar.
+      state = AsyncError(e, st);
+      state = const AsyncData(null);
+      return false;
     }
   }
 
@@ -65,9 +65,9 @@ class AuthState extends AsyncNotifier<Profile?> {
           );
       final profile = await ref.read(authServiceProvider).currentProfile();
       state = AsyncData(profile);
-    } catch (e) {
+    } catch (e, st) {
+      state = AsyncError(e, st);
       state = const AsyncData(null);
-      rethrow;
     }
   }
 

@@ -156,22 +156,76 @@ class UsersScreen extends ConsumerWidget {
 
   Future<void> _showResetDialog(BuildContext context, WidgetRef ref, Profile profile) async {
     final passCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    var obscurePass = true;
+    var obscureConfirm = true;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Nueva contraseña para ${profile.username}'),
-        content: TextField(
-          controller: passCtrl,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'Contraseña nueva'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('Nueva contraseña para ${profile.username}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: passCtrl,
+                obscureText: obscurePass,
+                decoration: InputDecoration(
+                  labelText: 'Contraseña nueva',
+                  suffixIcon: IconButton(
+                    tooltip: obscurePass ? 'Mostrar' : 'Ocultar',
+                    icon: Icon(obscurePass
+                        ? Icons.visibility
+                        : Icons.visibility_off),
+                    onPressed: () =>
+                        setDlg(() => obscurePass = !obscurePass),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmCtrl,
+                obscureText: obscureConfirm,
+                decoration: InputDecoration(
+                  labelText: 'Confirmar contraseña',
+                  suffixIcon: IconButton(
+                    tooltip: obscureConfirm ? 'Mostrar' : 'Ocultar',
+                    icon: Icon(obscureConfirm
+                        ? Icons.visibility
+                        : Icons.visibility_off),
+                    onPressed: () =>
+                        setDlg(() => obscureConfirm = !obscureConfirm),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Guardar')),
-        ],
       ),
     );
-    if (ok != true || passCtrl.text.isEmpty) return;
+    if (ok != true) return;
+    if (passCtrl.text.isEmpty || confirmCtrl.text.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Ingresa y confirma la contraseña')));
+      }
+      return;
+    }
+    if (passCtrl.text != confirmCtrl.text) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Las contraseñas no coinciden')));
+      }
+      return;
+    }
+    if (passCtrl.text.length < 6) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La contraseña debe tener al menos 6 caracteres')));
+      }
+      return;
+    }
     try {
       await ref.read(adminUserServiceProvider).resetPassword(
             userId: profile.id,

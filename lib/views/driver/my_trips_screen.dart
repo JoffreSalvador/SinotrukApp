@@ -73,9 +73,21 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
         to: DateUtilsX.format(_to!),
       );
     } else {
-      // Por defecto: últimos 10 viajes (ya vienen ordenados por fecha desc).
-      trips = (await repo.tripsOfDriver(profile.id)).take(10).toList();
+      trips = await repo.tripsOfDriver(profile.id);
     }
+    // Más reciente arriba; a igualdad de fecha, el creado primero va abajo.
+    trips.sort((a, b) {
+      final byDate = b.tripDate.compareTo(a.tripDate);
+      if (byDate != 0) return byDate;
+      final ac = a.createdAt;
+      final bc = b.createdAt;
+      if (ac == null && bc == null) return 0;
+      if (ac == null) return 1;
+      if (bc == null) return -1;
+      return bc.compareTo(ac);
+    });
+    // Por defecto: últimos 10 viajes ya ordenados.
+    if (!_hasFilter) trips = trips.take(10).toList();
     final reports = <_TripReport>[];
     for (final trip in trips) {
       final passengers = await repo.passengersOf(trip.id);
@@ -172,7 +184,7 @@ class _MyTripsScreenState extends ConsumerState<MyTripsScreen> {
         actions: [
           IconButton(
             icon: Icon(Icons.filter_list,
-                color: _hasFilter ? AppTheme.button : null),
+                color: (_showFilter || _hasFilter) ? AppTheme.button : null),
             tooltip: 'Filtrar por fechas',
             onPressed: () => setState(() => _showFilter = !_showFilter),
           ),

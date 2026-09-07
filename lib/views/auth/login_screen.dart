@@ -18,6 +18,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordCtrl = TextEditingController();
   bool? _needsBootstrap;
   bool _checking = true;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -107,9 +108,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       controller: _passwordCtrl,
-                      decoration:
-                          const InputDecoration(labelText: 'Contraseña'),
-                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'Contraseña',
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword
+                              ? 'Mostrar contraseña'
+                              : 'Ocultar contraseña',
+                          icon: Icon(_obscurePassword
+                              ? Icons.visibility
+                              : Icons.visibility_off),
+                          onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
+                        ),
+                      ),
+                      obscureText: _obscurePassword,
                       validator: (v) =>
                           (v == null || v.isEmpty) ? 'Ingresa tu contraseña' : null,
                       onFieldSubmitted: (_) => _submit(),

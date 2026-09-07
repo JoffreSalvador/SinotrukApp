@@ -579,7 +579,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           actions: [
             IconButton(
               icon: Icon(Icons.filter_list,
-                  color: _hasFilter ? AppTheme.button : null),
+                  color: (_showFilter || _hasFilter) ? AppTheme.button : null),
               tooltip: 'Filtrar por fechas',
               onPressed: () => setState(() => _showFilter = !_showFilter),
             ),

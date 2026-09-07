@@ -59,6 +59,45 @@ class DriverAccountsScreen extends ConsumerStatefulWidget {
 
 class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
   int _limit = 10;
+  DateTime? _from;
+  DateTime? _to;
+  DateTime? _draftFrom;
+  DateTime? _draftTo;
+  bool _showFilter = false;
+
+  bool get _hasFilter => _from != null && _to != null;
+
+  bool get _canApplyFilter =>
+      _draftFrom != null &&
+      _draftTo != null &&
+      !_draftFrom!.isAfter(_draftTo!) &&
+      (_draftFrom != _from || _draftTo != _to);
+
+  bool get _canClearFilter =>
+      _draftFrom != null ||
+      _draftTo != null ||
+      _from != null ||
+      _to != null;
+
+  Future<void> _pickDraftDate(bool isFrom) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isFrom
+          ? (_draftFrom ?? DateTime.now())
+          : (_draftTo ?? DateTime.now()),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isFrom) {
+          _draftFrom = picked;
+        } else {
+          _draftTo = picked;
+        }
+      });
+    }
+  }
 
   void _refresh(String driverId) {
     ref.invalidate(driverEntriesStreamProvider(driverId));
@@ -75,13 +114,22 @@ class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
     if (profile == null) return const Center(child: CircularProgressIndicator());
 
     final entriesAsync = ref.watch(driverEntriesStreamProvider(profile.id));
-    final adjAsync = ref.watch(driverAdjustmentStreamProvider(
-        (driverId: profile.id, from: null, to: null)));
+    final adjAsync = ref.watch(driverAdjustmentStreamProvider((
+      driverId: profile.id,
+      from: _from == null ? null : DateUtilsX.format(_from!),
+      to: _to == null ? null : DateUtilsX.format(_to!),
+    )));
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cuentas con el empleador'),
         actions: [
+          IconButton(
+            icon: Icon(Icons.filter_list,
+                color: (_showFilter || _hasFilter) ? AppTheme.button : null),
+            tooltip: 'Filtrar por fechas',
+            onPressed: () => setState(() => _showFilter = !_showFilter),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Recargar',
@@ -92,6 +140,7 @@ class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: [
+          AnimatedFilterPanel(expanded: _showFilter, child: _filterCard()),
           adjAsync.when(
             loading: () => const Center(
               child: Padding(
@@ -172,16 +221,23 @@ class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
             ),
             error: (e, _) => Text('Error: $e'),
             data: (entries) {
-              final sorted = entries.toList()
+              final inScope = _hasFilter
+                  ? entries
+                      .where((e) =>
+                          e.txDate.compareTo(DateUtilsX.format(_from!)) >= 0 &&
+                          e.txDate.compareTo(DateUtilsX.format(_to!)) <= 0)
+                      .toList()
+                  : entries.toList();
+              final sorted = inScope
                 ..sort((a, b) => b.txDate.compareTo(a.txDate));
               final visible = sorted.take(_limit).toList();
               return Column(
                 children: [
-                  if (entries.isNotEmpty)
+                  if (sorted.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        'Últimos ${visible.length} de ${entries.length}',
+                        'Últimos ${visible.length} de ${sorted.length}',
                         style: Theme.of(context).textTheme.labelSmall,
                       ),
                     ),
@@ -224,6 +280,80 @@ class _DriverAccountsScreenState extends ConsumerState<DriverAccountsScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _filterCard() {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _pickDraftDate(true),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                          labelText: 'Desde', prefixIcon: Icon(Icons.date_range)),
+                      child: Text(_draftFrom != null
+                          ? DateUtilsX.format(_draftFrom!)
+                          : 'Seleccionar'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => _pickDraftDate(false),
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                          labelText: 'Hasta', prefixIcon: Icon(Icons.date_range)),
+                      child: Text(_draftTo != null
+                          ? DateUtilsX.format(_draftTo!)
+                          : 'Seleccionar'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _canApplyFilter
+                        ? () => setState(() {
+                              _from = _draftFrom;
+                              _to = _draftTo;
+                            })
+                        : null,
+                    icon: const Icon(Icons.filter_alt),
+                    label: const Text('Filtrar'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _canClearFilter
+                        ? () => setState(() {
+                              _from = null;
+                              _to = null;
+                              _draftFrom = null;
+                              _draftTo = null;
+                            })
+                        : null,
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Limpiar'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
