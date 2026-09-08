@@ -31,7 +31,7 @@ class _AdminHomeState extends ConsumerState<AdminHome> {
 
   static const _mains = [0, 3, 4, 5];
 
-  /// Índice resaltado en la barra (0 Reportes, 1 Gastos V., 2 Gerente, 3 Cuentas).
+  /// Índice resaltado en la barra (0 Reportes, 1 Gastos V., 2 C. Gato, 3 C. Conductor).
   int get _barIndex => _mains.indexOf(_lastMain);
 
   void _go(int i) {
@@ -156,11 +156,11 @@ class _AdminHomeState extends ConsumerState<AdminHome> {
                         index: 3),
                     _drawerTile(
                         icon: Icons.account_balance,
-                        label: 'Gerente',
+                        label: 'C. Gato',
                         index: 4),
                     _drawerTile(
                         icon: Icons.account_balance_wallet,
-                        label: 'Cuentas',
+                        label: 'C. Conductor',
                         index: 5),
                     const Divider(),
                     _sectionLabel('Administración'),
@@ -199,9 +199,9 @@ class _AdminHomeState extends ConsumerState<AdminHome> {
           NavigationDestination(
               icon: Icon(Icons.receipt_long), label: 'Gastos V.'),
           NavigationDestination(
-              icon: Icon(Icons.account_balance), label: 'Gerente'),
+              icon: Icon(Icons.account_balance), label: 'C. Gato'),
           NavigationDestination(
-              icon: Icon(Icons.account_balance_wallet), label: 'Cuentas'),
+              icon: Icon(Icons.account_balance_wallet), label: 'C. Conductor'),
         ],
       ),
     );

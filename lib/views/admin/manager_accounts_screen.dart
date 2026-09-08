@@ -39,7 +39,7 @@ class _ManagerAccountsScreenState extends ConsumerState<ManagerAccountsScreen> {
     final adjAsync = ref.watch(managerAdjustmentStreamProvider(range));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cuenta con el gerente'), actions: [
+      appBar: AppBar(title: const Text('Cuenta C. Gato'), actions: [
         IconButton(
           icon: Icon(Icons.filter_list,
               color: (_showFilter || _hasFilter) ? AppTheme.button : null),

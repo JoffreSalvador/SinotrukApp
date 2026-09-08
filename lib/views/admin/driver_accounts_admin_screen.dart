@@ -70,7 +70,7 @@ class _DriverAccountsAdminScreenState extends ConsumerState<DriverAccountsAdminS
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cuentas conductores'),
+        title: const Text('C. Conductor'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
