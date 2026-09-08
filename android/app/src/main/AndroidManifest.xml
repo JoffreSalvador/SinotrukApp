@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Requerido en RELEASE (el manifest de debug ya lo trae solo para desarrollo) -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Requerido para instalar el APK descargado en la actualización in-app -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
         android:label="Sinotruk Transport"
         android:name="${applicationName}"

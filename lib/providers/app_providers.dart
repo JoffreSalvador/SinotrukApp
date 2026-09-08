@@ -7,6 +7,7 @@ import '../models/profile.dart';
 import '../repositories/repositories.dart';
 import '../services/auth_service.dart';
 import '../services/admin_user_service.dart';
+import '../services/update_service.dart';
 import 'core_providers.dart';
 import 'stream_providers.dart';
 
@@ -30,6 +31,9 @@ final functionsApiProvider = Provider<FunctionsApi>(
 
 final adminUserServiceProvider = Provider<AdminUserService>(
     (ref) => AdminUserService(ref.watch(functionsApiProvider)));
+
+final updateServiceProvider = Provider<UpdateService>(
+    (ref) => UpdateService(ref.watch(supabaseClientProvider)));
 
 /// Estado de sesión: perfil del usuario logueado o null.
 class AuthState extends AsyncNotifier<Profile?> {

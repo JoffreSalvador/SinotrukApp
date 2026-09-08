@@ -1,7 +1,7 @@
 name: sinotruk_app
 description: Sinotruk Transport - gestion de viajes, gastos y cuentas (Flutter + Supabase online-first)
 publish_to: "none"
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -22,6 +22,7 @@ dependencies:
   intl: ^0.19.0
   async: ^2.13.1
   package_info_plus: ^10.2.1
+  ota_update: ^7.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
