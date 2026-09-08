@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rutas que ota_update necesita exponer para instalar el APK descargado.
+     El plugin descarga en <dataDir>/files/ota_update, de ahí <files-path>. -->
+<paths>
+    <files-path name="ota_update" path="ota_update/" />
+</paths>
